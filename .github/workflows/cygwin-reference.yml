@@ -1,0 +1,35 @@
+name: Cygwin PHP native fork research
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cygwin-reference.yml'
+      - 'tools/build-cygwin-php.sh'
+      - 'tests/reference/fork-exec.php'
+      - 'tests/reference/fixtures/exec-child.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cygwin:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: php/php-src
+          ref: PHP-8.5
+          path: upstream/php-src
+      - name: Install POSIX build dependencies under Cygwin
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://cygwin.com/setup-x86_64.exe' -OutFile "$env:RUNNER_TEMP\setup-x86_64.exe"
+          $packages = 'gcc-core,make,autoconf,automake,libtool,git,bison,re2c,libxml2-devel,libpcre2-devel,libsqlite3-devel,pkg-config,libiconv-devel,zlib-devel'
+          & "$env:RUNNER_TEMP\setup-x86_64.exe" --quiet-mode --no-admin --no-shortcuts --no-startmenu --no-desktop --root 'C:\cygwin64' --site 'https://mirrors.kernel.org/sourceware/cygwin/' --packages $packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Cygwin-linked PHP and run real PCNTL fork/exec tests
+        shell: pwsh
+        run: |
+          & 'C:\cygwin64\bin\bash.exe' -l -c 'bash "$(cygpath -u "$GITHUB_WORKSPACE")/tools/build-cygwin-php.sh"'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
