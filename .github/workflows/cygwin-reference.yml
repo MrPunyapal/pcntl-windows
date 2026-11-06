@@ -27,6 +27,23 @@ jobs:
           repository: php/php-src
           ref: PHP-8.5
           path: upstream/php-src
+      - name: Install prebuilt Windows re2c for faster PHP generation
+        shell: pwsh
+        run: |
+          choco install re2c --version=3.0 --yes --no-progress
+          if ($LASTEXITCODE -eq 0) {
+            $original = Join-Path $env:ChocolateyInstall 'lib\re2c\tools\re2c.exe'
+            if (-not (Test-Path -LiteralPath $original)) {
+              throw 'The installed Chocolatey re2c package has an unexpected layout.'
+            }
+            $hash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToUpperInvariant()
+            if ($hash -ne 'DA0D06709B040060F697508A2367CA86034647DA706268CF400AF781D73C30D4') {
+              throw 'Re2c binary hash mismatch.'
+            }
+            Write-Output 'Using verified standalone re2c 3.0 binary'
+          } else {
+            Write-Warning 'Chocolatey re2c unavailable; falling back to pinned upstream source build'
+          }
       - name: Install POSIX build dependencies under Cygwin
         shell: pwsh
         run: |

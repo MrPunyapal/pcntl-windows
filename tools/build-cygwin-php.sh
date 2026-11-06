@@ -12,6 +12,11 @@ source="$workspace/upstream/php-src"
 cd "$source"
 
 export PATH="/usr/bin:/bin:$PATH"
+# The Chocolatey re2c executable is standalone and works as a lexer tool
+# from Cygwin. Keep the verified source-build path as a fallback.
+if [ -x /cygdrive/c/ProgramData/chocolatey/bin/re2c.exe ]; then
+    export PATH="/cygdrive/c/ProgramData/chocolatey/bin:$PATH"
+fi
 export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
 # Cygwin's package index does not currently include re2c. Build a pinned
 # upstream release instead of bypassing PHP's configure requirements.
