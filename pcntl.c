@@ -408,7 +408,9 @@ PHP_FUNCTION(pcntl_strerror)
 #include "pcntl_extra.h"
 #include "pcntl_waitid.h"
 #include "pcntl_signals.h"
+#include "Zend/zend_enum.h"
 #include "pcntl_sigwait.h"
+#include "pcntl_qos.h"
 
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
@@ -417,6 +419,8 @@ static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_getcpuaffinity, arginfo_pcntl_getcpuaffinity)
     PHP_FE(pcntl_setcpuaffinity, arginfo_pcntl_setcpuaffinity)
     PHP_FE(pcntl_getcpu, arginfo_pcntl_getcpu)
+    PHP_FE(pcntl_getqos_class, arginfo_pcntl_getqos_class)
+    PHP_FE(pcntl_setqos_class, arginfo_pcntl_setqos_class)
     PHP_FE(pcntl_wifcontinued, arginfo_pcntl_status_bool)
     PHP_FE(pcntl_signal, arginfo_pcntl_signal)
     PHP_FE(pcntl_signal_get_handler, arginfo_pcntl_signal_get_handler)
@@ -445,6 +449,7 @@ static const zend_function_entry pcntl_functions[] = {
 PHP_MINIT_FUNCTION(pcntl)
 {
     ZEND_INIT_MODULE_GLOBALS(pcntl, pcntl_globals_init, NULL);
+    if (pcntl_register_qos() != SUCCESS) return FAILURE;
     REGISTER_LONG_CONSTANT("PRIO_PROCESS", PCNTL_PRIO_PROCESS, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PRIO_PGRP", PCNTL_PRIO_PGRP, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PRIO_USER", PCNTL_PRIO_USER, CONST_CS | CONST_PERSISTENT);
