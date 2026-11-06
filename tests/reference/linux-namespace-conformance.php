@@ -58,8 +58,7 @@ try {
     }
     $message = trim((string) file_get_contents($ready));
     if (str_starts_with($message, 'SKIP:')) {
-        echo $message, "\n";
-        exit(0);
+        throw new RuntimeException($message, 77);
     }
     if (!str_starts_with($message, 'READY: ')) {
         throw new RuntimeException($message);
@@ -91,13 +90,18 @@ try {
     }
     $exitStatus = pcntl_wexitstatus($checkStatus);
     if ($exitStatus === 77) {
-        echo "SKIP: pcntl_setns denied by Linux kernel policy\n";
-        exit(0);
+        throw new RuntimeException("SKIP: pcntl_setns denied by Linux kernel policy", 77);
     }
     if ($exitStatus !== 0) {
         throw new RuntimeException('pcntl_setns did not join the target network namespace');
     }
     echo "PASS: pcntl_unshare and pcntl_setns changed network namespace in separate children\n";
+} catch (RuntimeException $e) {
+    if ($e->getCode() === 77) {
+        echo $e->getMessage(), "\n";
+    } else {
+        throw $e;
+    }
 } finally {
     file_put_contents($release, 'done');
     if ($checker !== null && $checker > 0) {
