@@ -1,0 +1,25 @@
+name: Native NT clone feasibility (standalone research)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'research/rtl-clone.c'
+      - '.github/workflows/nt-clone-research.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  clone:
+    runs-on: windows-2022
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build standalone NT clone experiment
+        shell: cmd
+        run: cl.exe /nologo /W4 /O2 /Fe:rtl-clone.exe research\rtl-clone.c
+      - name: Test process continuation and private memory
+        shell: cmd
+        run: rtl-clone.exe
