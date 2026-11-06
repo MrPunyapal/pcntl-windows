@@ -160,6 +160,60 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_strerror, 0, 1, IS_STRING,
     ZEND_ARG_TYPE_INFO(0, error_code, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+/* Stop only processes created in this request; not POSIX signaling. */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_windows_terminate, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, process_id, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, exit_code, IS_LONG, 0, "1")
+ZEND_END_ARG_INFO()
+
+PHP_FUNCTION(pcntl_windows_terminate)
+{
+    zend_long pid, exit_code = 1;
+    pcntl_win_child *child;
+    DWORD wait_result;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_LONG(pid)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(exit_code)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (exit_code < 0 || exit_code > 255) {
+        zend_argument_value_error(2, "must be between 0 and 255");
+        RETURN_THROWS();
+    }
+    if (pid <= 0 || (uint64_t) pid > UINT32_MAX) {
+        PCNTL_G(last_error) = EINVAL;
+        RETURN_FALSE;
+    }
+
+    for (child = PCNTL_G(children); child; child = child->next) {
+        if (child->pid == (DWORD) pid) {
+            break;
+        }
+    }
+    if (!child) {
+        PCNTL_G(last_error) = ECHILD;
+        RETURN_FALSE;
+    }
+
+    wait_result = WaitForSingleObject(child->handle, 0);
+    if (wait_result == WAIT_OBJECT_0) {
+        PCNTL_G(last_error) = ECHILD;
+        RETURN_FALSE;
+    }
+    if (wait_result != WAIT_TIMEOUT) {
+        PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+        RETURN_FALSE;
+    }
+    if (!TerminateProcess(child->handle, (UINT) exit_code)) {
+        PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+        RETURN_FALSE;
+    }
+    PCNTL_G(last_error) = 0;
+    RETURN_TRUE;
+}
+
 PHP_FUNCTION(pcntl_windows_spawn)
 {
     zend_string *executable;
@@ -414,6 +468,7 @@ PHP_FUNCTION(pcntl_strerror)
 
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
+    PHP_FE(pcntl_windows_terminate, arginfo_pcntl_windows_terminate)
     PHP_FE(pcntl_getpriority, arginfo_pcntl_getpriority)
     PHP_FE(pcntl_setpriority, arginfo_pcntl_setpriority)
     PHP_FE(pcntl_getcpuaffinity, arginfo_pcntl_getcpuaffinity)
