@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <wchar.h>
+#include <psapi.h>
 
 #define PCNTL_WINDOWS_WNOHANG 1
 
@@ -164,7 +165,6 @@ PHP_FUNCTION(pcntl_windows_spawn)
     STARTUPINFOW startup;
     PROCESS_INFORMATION process;
     pcntl_win_child *child;
-    int count = 0;
     bool invalid = false;
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
@@ -176,11 +176,6 @@ PHP_FUNCTION(pcntl_windows_spawn)
     if (ZSTR_LEN(executable) == 0) {
         zend_argument_value_error(1, "must not be empty");
         RETURN_THROWS();
-    }
-    for (child = PCNTL_G(children); child; child = child->next) count++;
-    if (count >= MAXIMUM_WAIT_OBJECTS) {
-        PCNTL_G(last_error) = EAGAIN;
-        RETURN_FALSE;
     }
     argc = arguments ? zend_hash_num_elements(arguments) + 1 : 1;
     argv = safe_emalloc(argc, sizeof(wchar_t *), 0);
@@ -233,36 +228,81 @@ PHP_FUNCTION(pcntl_windows_spawn)
     RETURN_LONG((zend_long) process.dwProcessId);
 }
 
-/* Waits only for children created through pcntl_windows_spawn in this request. */
+/* Map only metrics whose Win32 equivalents are useful to PHP callers.
+ * Windows PeakWorkingSetSize is an approximation of POSIX ru_maxrss. */
+static void pcntl_win_rusage(HANDLE handle, zval *usage)
+{
+    FILETIME created, exited, kernel, user;
+    PROCESS_MEMORY_COUNTERS memory;
+    ULARGE_INTEGER ticks;
+    ZVAL_DEREF(usage);
+    zval_ptr_dtor(usage);
+    array_init(usage);
+    if (GetProcessTimes(handle, &created, &exited, &kernel, &user)) {
+        ticks.LowPart = user.dwLowDateTime;
+        ticks.HighPart = user.dwHighDateTime;
+        add_assoc_long(usage, "ru_utime.tv_sec", (zend_long) (ticks.QuadPart / 10000000ULL));
+        add_assoc_long(usage, "ru_utime.tv_usec", (zend_long) ((ticks.QuadPart % 10000000ULL) / 10));
+        ticks.LowPart = kernel.dwLowDateTime;
+        ticks.HighPart = kernel.dwHighDateTime;
+        add_assoc_long(usage, "ru_stime.tv_sec", (zend_long) (ticks.QuadPart / 10000000ULL));
+        add_assoc_long(usage, "ru_stime.tv_usec", (zend_long) ((ticks.QuadPart % 10000000ULL) / 10));
+    }
+    memset(&memory, 0, sizeof(memory));
+    memory.cb = sizeof(memory);
+    if (GetProcessMemoryInfo(handle, &memory, sizeof(memory))) {
+        add_assoc_long(usage, "ru_maxrss", (zend_long) (memory.PeakWorkingSetSize / 1024));
+    }
+}
+
+/* Wait on one child or poll registered process handles for any-child waits.
+ * Unlike WaitForMultipleObjects, this is not restricted to 64 handles. */
 static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, zval *usage)
 {
     pcntl_win_child *node, *selected = NULL, **link;
-    HANDLE handles[MAXIMUM_WAIT_OBJECTS];
-    pcntl_win_child *nodes[MAXIMUM_WAIT_OBJECTS];
-    DWORD n = 0, result, exit_code;
+    DWORD result, exit_code;
 
     if ((flags & ~PCNTL_WINDOWS_WNOHANG) != 0 || pid == 0 || pid < -1) {
         PCNTL_G(last_error) = EINVAL;
         return -1;
     }
-    for (node = PCNTL_G(children); node; node = node->next) {
-        if (pid == -1 || pid == (zend_long) node->pid) {
-            handles[n] = node->handle;
-            nodes[n] = node;
-            n++;
-        }
-    }
-    if (!n) {
+    if (!PCNTL_G(children)) {
         PCNTL_G(last_error) = ECHILD;
         return -1;
     }
-    result = WaitForMultipleObjects(n, handles, FALSE, (flags & PCNTL_WINDOWS_WNOHANG) ? 0 : INFINITE);
-    if (result == WAIT_TIMEOUT) return 0;
-    if (result == WAIT_FAILED || result >= WAIT_OBJECT_0 + n) {
-        PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
-        return -1;
+    if (pid > 0) {
+        for (node = PCNTL_G(children); node; node = node->next) {
+            if (pid == (zend_long) node->pid) break;
+        }
+        if (!node) {
+            PCNTL_G(last_error) = ECHILD;
+            return -1;
+        }
+        result = WaitForSingleObject(node->handle, (flags & PCNTL_WINDOWS_WNOHANG) ? 0 : INFINITE);
+        if (result == WAIT_TIMEOUT) return 0;
+        if (result != WAIT_OBJECT_0) {
+            PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+            return -1;
+        }
+        selected = node;
+    } else {
+        for (;;) {
+            for (node = PCNTL_G(children); node; node = node->next) {
+                result = WaitForSingleObject(node->handle, 0);
+                if (result == WAIT_OBJECT_0) {
+                    selected = node;
+                    break;
+                }
+                if (result != WAIT_TIMEOUT) {
+                    PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+                    return -1;
+                }
+            }
+            if (selected) break;
+            if (flags & PCNTL_WINDOWS_WNOHANG) return 0;
+            Sleep(10); /* Bounded-latency poll; replace with threadpool waits later. */
+        }
     }
-    selected = nodes[result - WAIT_OBJECT_0];
     if (!GetExitCodeProcess(selected->handle, &exit_code)) {
         PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
         return -1;
@@ -270,11 +310,7 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
     ZVAL_DEREF(status);
     zval_ptr_dtor(status);
     ZVAL_LONG(status, (zend_long) ((exit_code & 0xff) << 8));
-    if (usage) {
-        ZVAL_DEREF(usage);
-        zval_ptr_dtor(usage);
-        array_init(usage); /* No Win32 rusage translation yet. */
-    }
+    if (usage) pcntl_win_rusage(selected->handle, usage);
     pid = (zend_long) selected->pid;
     for (link = &PCNTL_G(children); *link; link = &(*link)->next) {
         if (*link == selected) {

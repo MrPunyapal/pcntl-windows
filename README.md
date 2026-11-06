@@ -48,12 +48,12 @@ assert(pcntl_wexitstatus($status) === 37);
 ## Intentional first-slice limitations
 
 - Child registration is **request-local**. `waitpid` supports a specific registered PID or `-1` (any registered child); PID `0` and negative process groups are not yet supported.
-- Only `WNOHANG` is supported. Up to 64 outstanding child handles, pending a scalable wait backend.
+- Only `WNOHANG` is supported. Any-child waits poll all registered handles, avoiding the Win32 64-handle wait limit at the cost of polling latency.
 - Normal exits are encoded like POSIX wait statuses using the low eight bits of the Win32 exit code. This loses Windows-specific 32-bit exit information and **does not** claim POSIX signal termination semantics.
-- `resource_usage` is returned as an empty array; Win32 resource usage translation is not yet implemented.
+- `resource_usage` provides Windows process CPU times and peak working-set memory; these are not fully equivalent to POSIX rusage.
 - All spawned children must run within this request to be waited on, but closing an outstanding handle at request shutdown does **not** kill the child.
 - The helper takes an explicit executable and string arguments, without shell evaluation or inherited arbitrary handles.
-- Not production ready. No actual Windows build has been confirmed until CI succeeds.
+- Not production ready. Windows CI builds and tests are required for each change.
 
 ## Contributing
 
