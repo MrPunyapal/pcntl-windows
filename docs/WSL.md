@@ -16,3 +16,5 @@ Unix process IDs, open descriptors, memory and extensions belong to the Linux in
 Run tools/posix-capabilities.php to list all 34 conditional upstream function names and their availability. Linux supports fork and exec, but BSD rfork, Solaris forkx and Darwin QoS are not guaranteed. Namespace calls need suitable Linux kernel support and privileges; test CLONE_NEWUSER only with PCNTL_PROBE_UNSHARE=1.
 
 See tests/reference/fork-exec.php for a genuine fork/exec conformance test.
+
+The PowerShell wrapper's syntax is checked in Windows CI. A real WSL2 machine is still required to validate path translation, distribution selection and CLI argument forwarding end-to-end.

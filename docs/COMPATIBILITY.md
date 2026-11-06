@@ -20,7 +20,7 @@ Target: the full conditional set of 34 function names declared by PHP 8.5's ext/
 
 ## Cooperative signals
 
-- pcntl_signal: exported for selected extension-managed signals and console controls; no arbitrary POSIX process-wide signal delivery.
+- pcntl_signal: exported for selected extension-managed signals, console controls, and registered Windows-child SIGCHLD notifications; no arbitrary POSIX process-wide signal delivery.
 - pcntl_signal_get_handler, pcntl_signal_dispatch: exported for registered PHP callbacks on the execution thread.
 - pcntl_async_signals: exported, integrates queued events through Zend VM interrupts for one active CLI request.
 - pcntl_sigprocmask: exported for extension-managed signals only; not a kernel thread signal mask.
@@ -50,3 +50,13 @@ Primary sources:
 - https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
 - https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups
 - https://www.php.net/manual/en/book.pcntl.php
+
+## Alternate native POSIX runtime validation
+
+- WSL2 Linux PHP: real fork/exec conformance is covered by tests/reference/fork-exec.php; Linux namespace capabilities are probed separately and depend on privileges.
+- FreeBSD PHP: rfork is tested in tests/reference/rfork.php on a FreeBSD VM.
+- Solaris/illumos PHP: forkx is tested in tests/reference/forkx.php on a Solaris VM when available.
+- macOS PHP: Apple QoS is validated in tests/reference/darwin-qos.php.
+- Native Win32 helpers pcntl_windows_spawn, pcntl_windows_terminate and pcntl_windows_raise are not upstream PCNTL functions and must not be confused with true Unix process semantics.
+
+See docs/WSL.md and docs/PLATFORM-REFERENCES.md for runtime details.

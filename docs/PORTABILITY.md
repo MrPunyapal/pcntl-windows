@@ -5,11 +5,11 @@ This is an engineering feasibility report, not a promise that all Unix PCNTL fea
 ## Backends
 
 - **Win32 extension (current):** child creation and waiting, status decoding, scheduling, affinity and cooperative signals using native Windows APIs. Continue hardening and extending supported semantics.
-- **WSL2 Linux PHP:** run a separate Linux PHP binary to use genuine Linux fork, exec, wait, signal masks, unshare and setns. WSL2 cannot insert Linux syscalls into a live Windows PHP interpreter, and cannot directly support BSD or Solaris-only APIs.
+- **WSL2 Linux PHP:** tools/Invoke-WslPhp.ps1 launches the entire script inside Linux with upstream PCNTL; Linux CI verifies fork/exec semantics. Actual WSL host-wrapper execution requires a configured WSL2 installation. Linux unshare and setns still depend on privileges. WSL2 cannot insert Linux syscalls into a live Windows PHP interpreter, and cannot directly support BSD or Solaris-only APIs.
 - **Cygwin PHP:** investigate a PHP build against Cygwin's POSIX runtime. Cygwin implements a fork emulation across its own ABI and can provide Unix-like process behavior on Windows. It is not ABI-compatible with a regular Windows PHP DLL. Complex PHP extension, DLL relocation and handle inheritance tests are required.
-- **FreeBSD/POSIX host:** needed to validate rfork's BSD-specific RF flags; Linux PCNTL is not the same contract.
-- **Solaris/illumos host:** needed to validate forkx and its Solaris-specific flags.
-- **Darwin host:** upstream QoS scheduler behavior is Apple-specific. Our Windows thread-priority mapping is useful but cannot guarantee scheduling parity.
+- **FreeBSD/POSIX host:** a FreeBSD VM workflow uses the real PHP PCNTL implementation to test rfork; Linux PCNTL is not the same contract.
+- **Solaris/illumos host:** a Solaris VM workflow and reference test exercise forkx on native Solaris PHP; results must be checked before claiming verified support.
+- **Darwin host:** a macOS reference workflow tests Apple's native QoS API. That behavior is Apple-specific. Our Windows thread-priority mapping is useful but cannot guarantee scheduling parity.
 
 ## Recommended conformance experiments
 

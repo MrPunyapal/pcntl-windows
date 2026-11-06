@@ -1,0 +1,26 @@
+name: WSL PowerShell wrapper validation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/Invoke-WslPhp.ps1'
+      - '.github/workflows/wsl-wrapper.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse PowerShell wrapper
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/Invoke-WslPhp.ps1').Path, [ref] $tokens, [ref] $errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Output 'PowerShell syntax validated'
