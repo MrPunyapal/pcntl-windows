@@ -20,3 +20,15 @@ See tests/reference/fork-exec.php for a genuine fork/exec conformance test.
 The PowerShell wrapper's syntax is checked in Windows CI. A real WSL2 machine is still required to validate path translation, distribution selection and CLI argument forwarding end-to-end.
 
 Linux CI also runs an isolated namespace conformance test: `tests/reference/linux-namespace-conformance.php`. It creates a fresh network namespace with `pcntl_unshare` and attempts to join that namespace using `pcntl_setns` from a different forked PHP child. The parent process retains its own network namespace. This test prints `PASS` only after verifying namespace identity changes. It prints `SKIP` when the Linux kernel disallows namespace creation or joining; an exit code of zero alone is not evidence that the namespace feature passed.
+
+## Select a PHP binary with verified namespace support
+
+Some standard PHP 8.5 Linux builds omit `pcntl_setns`. The [source-build workaround](LINUX-SETNS-85.md) restores upstream's missing `pidfd_open` configure check; the resulting PHP 8.5 binary passed real network namespace creation and joining tests in Linux CI.
+
+The WSL runner accepts a custom Linux interpreter and an optional strict capability check:
+
+```powershell
+./tools/Invoke-WslPhp.ps1 -Script ./program.php -LinuxPhp ./upstream/php-src/sapi/cli/php -RequireSetns
+```
+
+Use `-LinuxPhp /home/user/php-src/sapi/cli/php` for a binary residing inside WSL's Linux filesystem. If supplied a Windows-accessible path, the launcher translates it using `wslpath`. If supplied a Linux path or command name, it executes it as given. `-RequireSetns` refuses to run when `pcntl_setns()` is not exported, instead of silently running with reduced capabilities. Availability alone does not guarantee the current process has Linux namespace privileges.

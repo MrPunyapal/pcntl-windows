@@ -5,6 +5,9 @@ param(
     [ValidateNotNullOrEmpty()]
     [string] $Script,
     [string] $Distribution,
+    [ValidateNotNullOrEmpty()]
+    [string] $LinuxPhp = 'php',
+    [switch] $RequireSetns,
     [string[]] $PhpArguments = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -37,11 +40,29 @@ if ($LASTEXITCODE -ne 0 -or -not $cwd) {
 }
 $path = ($path | Select-Object -First 1).Trim()
 $cwd = ($cwd | Select-Object -First 1).Trim()
+
+# A Windows filesystem path to a custom Linux PHP binary is translated via
+# wslpath. An absolute Linux path or a PATH command (default: php) passes
+# straight to wsl.exe --exec without invoking a shell.
+$phpCommand = $LinuxPhp
+if (Test-Path -LiteralPath $LinuxPhp -PathType Leaf) {
+    $windowsPhp = (Resolve-Path -LiteralPath $LinuxPhp).ProviderPath
+    $translatePhp = $prefix + @('--exec', 'wslpath', '-u', $windowsPhp)
+    $mappedPhp = & wsl.exe @translatePhp
+    if ($LASTEXITCODE -ne 0 -or -not $mappedPhp) {
+        Write-Error 'Unable to resolve custom Linux PHP binary inside WSL.'
+        exit 2
+    }
+    $phpCommand = ($mappedPhp | Select-Object -First 1).Trim()
+}
 $probe = 'if (!extension_loaded("pcntl")) { fwrite(STDERR, "Linux PHP PCNTL is not loaded.\n"); exit(78); }'
-$probeArgs = $prefix + @('--cd', $cwd, '--exec', 'php', '-r', $probe)
+if ($RequireSetns) {
+    $probe += 'if (!function_exists("pcntl_setns")) { fwrite(STDERR, "Linux PHP pcntl_setns is unavailable. See docs/LINUX-SETNS-85.md.\n"); exit(78); }'
+}
+$probeArgs = $prefix + @('--cd', $cwd, '--exec', $phpCommand, '-r', $probe)
 & wsl.exe @probeArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # --exec invokes Linux PHP directly; script arguments are not shell-evaluated.
-$executeArgs = $prefix + @('--cd', $cwd, '--exec', 'php', $path) + $PhpArguments
+$executeArgs = $prefix + @('--cd', $cwd, '--exec', $phpCommand, $path) + $PhpArguments
 & wsl.exe @executeArgs
 exit $LASTEXITCODE
