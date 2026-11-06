@@ -1,0 +1,22 @@
+name: Solaris PCNTL native forkx reference (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  solaris:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check forkx in Solaris
+        uses: vmactions/solaris-vm@v1
+        with:
+          release: '11.4-gcc'
+          sync: rsync
+          copyback: false
+          prepare: |
+            pkg install web/php-84
+          run: |
+            php -v
+            php tools/posix-capabilities.php
+            php tests/reference/forkx.php

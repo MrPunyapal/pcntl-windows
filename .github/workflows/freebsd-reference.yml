@@ -1,0 +1,27 @@
+name: FreeBSD PCNTL native reference
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/freebsd-reference.yml'
+      - 'tests/reference/rfork.php'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check FreeBSD rfork using upstream PCNTL
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14'
+          sync: rsync
+          copyback: false
+          prepare: |
+            pkg install -y php84 php84-pcntl
+          run: |
+            php -v
+            php tools/posix-capabilities.php
+            php tests/reference/rfork.php
