@@ -1,4 +1,4 @@
-name: Solaris PCNTL native forkx reference (manual)
+name: Solaris PCNTL forkx reference
 on:
   push:
     branches: [main]
@@ -13,15 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Check forkx in Solaris
+      - uses: actions/checkout@v5
+        with:
+          repository: php/php-src
+          ref: PHP-8.4
+          path: upstream/php-src
+      - name: Build real Solaris PHP with PCNTL and test forkx
         uses: vmactions/solaris-vm@v1
         with:
           release: '11.4-gcc'
           sync: rsync
           copyback: false
           prepare: |
-            pkg install web/php-84
+            pkg install bison re2c
+            cd upstream/php-src
+            ./buildconf -f
+            CC=gcc CXX=g++ PATH=/usr/gnu/bin:/usr/bin ./configure --disable-all --enable-cli --disable-cgi --disable-phpdbg --enable-pcntl --without-pear
+            gmake -j2
           run: |
-            php -v
-            php tools/posix-capabilities.php
-            php tests/reference/forkx.php
+            upstream/php-src/sapi/cli/php -n -v
+            upstream/php-src/sapi/cli/php -n tools/posix-capabilities.php
+            upstream/php-src/sapi/cli/php -n tests/reference/forkx.php
