@@ -74,6 +74,7 @@ PHP_FUNCTION(pcntl_waitid)
         PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
         RETURN_FALSE;
     }
+    pcntl_win_emit_sigchld(selected);
     if (info) {
         ZVAL_DEREF(info);
         zval_ptr_dtor(info);
@@ -93,8 +94,7 @@ PHP_FUNCTION(pcntl_waitid)
                 break;
             }
         }
-        CloseHandle(selected->handle);
-        efree(selected);
+        pcntl_win_release_child(selected);
     }
     PCNTL_G(last_error) = 0;
     RETURN_TRUE;

@@ -23,6 +23,8 @@
 typedef struct pcntl_win_child {
     DWORD pid;
     HANDLE handle;
+    HANDLE wait_registration;
+    volatile LONG sigchld_sent;
     struct pcntl_win_child *next;
 } pcntl_win_child;
 
@@ -42,6 +44,35 @@ static void pcntl_globals_init(zend_pcntl_globals *g)
 {
     g->children = NULL;
     g->last_error = 0;
+}
+
+/* Threadpool callbacks may run on a Windows worker thread. Only queue events;
+ * never access PHP zvals or call PHP userland from these callbacks. */
+static void pcntl_win_enqueue(int signum);
+
+static void pcntl_win_emit_sigchld(pcntl_win_child *child)
+{
+    if (InterlockedCompareExchange(&child->sigchld_sent, 1, 0) == 0) {
+        pcntl_win_enqueue(17); /* SIGCHLD in this extension's constants. */
+    }
+}
+
+static VOID CALLBACK pcntl_win_child_exited(PVOID context, BOOLEAN timed_out)
+{
+    if (!timed_out) {
+        pcntl_win_emit_sigchld((pcntl_win_child *) context);
+    }
+}
+
+static void pcntl_win_release_child(pcntl_win_child *child)
+{
+    if (child->wait_registration != NULL) {
+        /* Wait until pending callbacks are finished before releasing child. */
+        UnregisterWaitEx(child->wait_registration, INVALID_HANDLE_VALUE);
+        child->wait_registration = NULL;
+    }
+    CloseHandle(child->handle);
+    efree(child);
 }
 
 static int pcntl_win32_errno(DWORD code)
@@ -272,6 +303,14 @@ PHP_FUNCTION(pcntl_windows_spawn)
             child = emalloc(sizeof(pcntl_win_child));
             child->pid = process.dwProcessId;
             child->handle = process.hProcess;
+            child->wait_registration = NULL;
+            child->sigchld_sent = 0;
+            /* A failure to register the notification does not lose the child:
+             * a successful wait still synthesizes one SIGCHLD event. */
+            RegisterWaitForSingleObject(
+                &child->wait_registration, child->handle,
+                pcntl_win_child_exited, child, INFINITE, WT_EXECUTEONLYONCE
+            );
             child->next = PCNTL_G(children);
             PCNTL_G(children) = child;
             PCNTL_G(last_error) = 0;
@@ -366,6 +405,7 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
         PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
         return -1;
     }
+    pcntl_win_emit_sigchld(selected);
     ZVAL_DEREF(status);
     zval_ptr_dtor(status);
     ZVAL_LONG(status, (zend_long) ((exit_code & 0xff) << 8));
@@ -377,8 +417,7 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
             break;
         }
     }
-    CloseHandle(selected->handle);
-    efree(selected);
+    pcntl_win_release_child(selected);
     PCNTL_G(last_error) = 0;
     return pid;
 }
@@ -557,15 +596,14 @@ PHP_RINIT_FUNCTION(pcntl)
 }
 PHP_RSHUTDOWN_FUNCTION(pcntl)
 {
-    pcntl_win_signal_request_shutdown();
     pcntl_win_child *child = PCNTL_G(children), *next;
     while (child) {
         next = child->next;
-        CloseHandle(child->handle); /* Detach; do not kill running children. */
-        efree(child);
+        pcntl_win_release_child(child); /* Detach; do not kill running children. */
         child = next;
     }
     PCNTL_G(children) = NULL;
+    pcntl_win_signal_request_shutdown();
     return SUCCESS;
 }
 PHP_MINFO_FUNCTION(pcntl)
