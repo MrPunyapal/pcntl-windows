@@ -1,60 +1,53 @@
 # pcntl-windows
 
-Experimental **native Windows PHP PCNTL extension**. The goal is to investigate the entire upstream PCNTL API, including functions with no native Win32 equivalent. This is **not a drop-in PCNTL replacement** today.
+Experimental native Windows implementation of PHP process-control APIs, tested with PHP 8.4 and 8.5. This is NOT a drop-in replacement for Unix PCNTL. Features with unavailable kernel semantics remain unexported instead of returning misleading successes.
 
-The first slice provides real process creation and waiting using `CreateProcessW`, Windows process handles, and `WaitForMultipleObjects`.
+## Implemented APIs
 
-## Implemented in the proof of concept
+28 of the 34 function names from the PHP 8.5 conditional pcntl stub are exported. See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the per-function compatibility matrix and exact limitations.
 
-- `pcntl_windows_spawn(string $executable, array $arguments = []): int|false` (Windows-specific helper, **not** `pcntl_fork`)
-- `pcntl_waitpid`, `pcntl_wait` for child PIDs returned by `pcntl_windows_spawn`
-- `pcntl_wifexited`, `pcntl_wexitstatus`, `pcntl_wifstopped`, `pcntl_wifsignaled`, `pcntl_wstopsig`, `pcntl_wtermsig`
-- `pcntl_get_last_error`, `pcntl_errno`, `pcntl_strerror`
-- `WNOHANG` and selected `PCNTL_E*` constants
+- **Child processes**: pcntl_windows_spawn (extra helper), pcntl_wait, pcntl_waitpid, pcntl_waitid, wait status decoders, resource usage. Child handles are request-local, exit codes are reduced to POSIX-compatible 8-bit status, and nonblocking/any-child waits are supported.
+- **Process scheduling**: pcntl_getpriority, pcntl_setpriority, pcntl_getcpuaffinity, pcntl_setcpuaffinity and pcntl_getcpu using Win32 process APIs. These expose coarse priority mapping and processor-group-relative affinity.
+- **Cooperative signals**: pcntl_signal, pcntl_signal_get_handler, pcntl_signal_dispatch, pcntl_async_signals, pcntl_sigprocmask, pcntl_alarm, pcntl_sigwaitinfo and pcntl_sigtimedwait. Console control events, Windows timers and in-process injected events feed a queue. PHP handlers run on the PHP execution thread.
+- **Thread QoS**: pcntl_getqos_class and pcntl_setqos_class expose Pcntl\QosClass, mapped to Windows thread priorities. This is not identical to macOS scheduling QoS.
+- **Errors**: pcntl_errno, pcntl_get_last_error, pcntl_strerror and selected POSIX-style error constants.
 
-Everything else is tracked in [the complete compatibility investigation](docs/COMPATIBILITY.md). No stub `pcntl_fork()` is exported. A Windows executable created with `CreateProcessW` starts a **new interpreter**; it cannot continue at the caller's `pcntl_fork()` return site with copied PHP heap/stack state.
+## Still unavailable on native Windows
 
-## Build
+- pcntl_fork: live memory, stack and instruction-pointer duplication of the running PHP interpreter.
+- pcntl_exec: process image replacement with identical PID and inherited process identity.
+- pcntl_forkx: Solaris-specific process creation flags.
+- pcntl_rfork: BSD-specific fork/resource sharing.
+- pcntl_unshare: Linux namespace creation and isolation.
+- pcntl_setns: Linux namespace membership changes.
 
-The experimental Windows build uses the PHP Foundation's [Windows extension builder](https://github.com/php/php-windows-builder) in GitHub Actions for PHP 8.4/8.5, x64 NTS and TS. The extension's `config.w32` enables `--enable-pcntl`. No prebuilt binaries are published yet.
+These need real additional runtime capabilities, not stub implementations. [docs/PORTABILITY.md](docs/PORTABILITY.md) covers Windows-native, Cygwin, WSL2 and platform-specific backends.
 
-On a suitable Windows PHP development environment, use `Invoke-PhpBuildExtension -PhpVersion 8.4 -Arch x64 -Ts nts -Args '--enable-pcntl'` from this repository (see the builder's local setup instructions).
+## Build and verify
 
-Enable the resulting extension in the matching Windows PHP CLI build:
+The repo provides a Windows GitHub Actions workflow using the PHP Foundation's official Windows extension builder. Builds target PHP 8.4 / 8.5, x64 and x86, TS and NTS. For every supported configuration, the builder runs the PHPT suite and uploads a php_pcntl.dll build artifact when successful.
+
+On Windows with matching PHP development tools, build with php/php-windows-builder and the --enable-pcntl configuration option (defined in config.w32). Then load the DLL using the matching PHP CLI build and enable it in php.ini:
 
 ```ini
 extension=php_pcntl.dll
 ```
 
-## Example
+Example:
 
 ```php
 <?php
 $pid = pcntl_windows_spawn(PHP_BINARY, ['-n', '-r', 'exit(37);']);
-if ($pid === false) {
+if ($pid === false || pcntl_waitpid($pid, $status) !== $pid) {
     throw new RuntimeException(pcntl_strerror(pcntl_errno()));
 }
-
-$result = pcntl_waitpid($pid, $status);
-if ($result === -1) {
-    throw new RuntimeException(pcntl_strerror(pcntl_errno()));
-}
-
-assert($result === $pid);
-assert(pcntl_wifexited($status));
-assert(pcntl_wexitstatus($status) === 37);
+echo pcntl_wexitstatus($status); // 37
 ```
 
-## Intentional first-slice limitations
+## Compatibility and safety
 
-- Child registration is **request-local**. `waitpid` supports a specific registered PID or `-1` (any registered child); PID `0` and negative process groups are not yet supported.
-- Only `WNOHANG` is supported. Any-child waits poll all registered handles, avoiding the Win32 64-handle wait limit at the cost of polling latency.
-- Normal exits are encoded like POSIX wait statuses using the low eight bits of the Win32 exit code. This loses Windows-specific 32-bit exit information and **does not** claim POSIX signal termination semantics.
-- `resource_usage` provides Windows process CPU times and peak working-set memory; these are not fully equivalent to POSIX rusage.
-- All spawned children must run within this request to be waited on, but closing an outstanding handle at request shutdown does **not** kill the child.
-- The helper takes an explicit executable and string arguments, without shell evaluation or inherited arbitrary handles.
-- Not production ready. Windows CI builds and tests are required for each change.
+The supported signal queue does not implement arbitrary POSIX process-directed signals, Linux syscall interruption semantics, or native Unix signal dispositions. Some functions return narrowed Windows-derived results, and several POSIX-specific constants are intentionally absent. Use the helper pcntl_windows_raise only for cooperative local events and testing, not as a substitute for posix_kill.
 
-## Contributing
+Supported usage is a single active PHP CLI request per process. Concurrent requests in ZTS servers, unusual extension combinations, process groups, Linux namespaces and exact POSIX fork semantics remain outside the verified scope. Review [docs/SIGNALS.md](docs/SIGNALS.md) and [docs/NATIVE-SCOPE.md](docs/NATIVE-SCOPE.md) before use.
 
-Prioritize semantic correctness and tests. Avoid implementations that merely make `function_exists('pcntl_fork')` true without matching upstream behavior. Preserve the public API's PHP signatures and behavior where possible. Unix-specific APIs will be investigated through kernel-backed capabilities, a POSIX compatibility runtime, or an explicitly documented alternate runtime.
+**Status: experimental.** Do not publish the extension as production-ready or claim full Unix PCNTL compatibility.
