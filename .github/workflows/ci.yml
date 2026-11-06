@@ -25,6 +25,8 @@ jobs:
           php-version: "8.5"
           arch: x64
           ts: ${{ matrix.ts }}
+          # Use a slash-free ref: the upstream builder uses it in a log filename.
+          extension-ref: ${{ github.sha }}
           args: --enable-pcntl-windows
           run-tests: "true"
 
