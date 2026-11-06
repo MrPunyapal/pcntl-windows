@@ -23,12 +23,14 @@ $prefix = @()
 if (-not [string]::IsNullOrWhiteSpace($Distribution)) {
     $prefix += @('-d', $Distribution)
 }
-$path = & wsl.exe @($prefix + @('--exec', 'wslpath', '-u', $source))
+$translateScript = $prefix + @('--exec', 'wslpath', '-u', $source)
+$path = & wsl.exe @translateScript
 if ($LASTEXITCODE -ne 0 -or -not $path) {
     Write-Error 'Unable to resolve PHP script inside WSL.'
     exit 2
 }
-$cwd = & wsl.exe @($prefix + @('--exec', 'wslpath', '-u', $working))
+$translateCwd = $prefix + @('--exec', 'wslpath', '-u', $working)
+$cwd = & wsl.exe @translateCwd
 if ($LASTEXITCODE -ne 0 -or -not $cwd) {
     Write-Error 'Unable to resolve working directory inside WSL.'
     exit 2
@@ -36,8 +38,10 @@ if ($LASTEXITCODE -ne 0 -or -not $cwd) {
 $path = ($path | Select-Object -First 1).Trim()
 $cwd = ($cwd | Select-Object -First 1).Trim()
 $probe = 'if (!extension_loaded("pcntl")) { fwrite(STDERR, "Linux PHP PCNTL is not loaded.\n"); exit(78); }'
-& wsl.exe @($prefix + @('--cd', $cwd, '--exec', 'php', '-r', $probe))
+$probeArgs = $prefix + @('--cd', $cwd, '--exec', 'php', '-r', $probe)
+& wsl.exe @probeArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # --exec invokes Linux PHP directly; script arguments are not shell-evaluated.
-& wsl.exe @($prefix + @('--cd', $cwd, '--exec', 'php', $path) + $PhpArguments)
+$executeArgs = $prefix + @('--cd', $cwd, '--exec', 'php', $path) + $PhpArguments
+& wsl.exe @executeArgs
 exit $LASTEXITCODE
