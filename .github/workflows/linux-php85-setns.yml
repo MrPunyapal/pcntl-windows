@@ -1,0 +1,34 @@
+name: PHP 8.5 native Linux PCNTL setns conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/build-linux-php85-pcntl.sh'
+      - 'tests/reference/linux-namespace-conformance.php'
+      - '.github/workflows/linux-php85-setns.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-php85:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: php/php-src
+          ref: PHP-8.5
+          path: upstream/php-src
+      - name: Install PHP source-build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential autoconf bison re2c pkg-config libxml2-dev libsqlite3-dev libpcre2-dev
+      - name: Build PHP with a detected pidfd_open for native PCNTL setns
+        run: bash tools/build-linux-php85-pcntl.sh
+      - name: Verify kernel namespace creation and joining
+        run: |
+          sudo -E upstream/php-src/sapi/cli/php -n tests/reference/linux-namespace-conformance.php
