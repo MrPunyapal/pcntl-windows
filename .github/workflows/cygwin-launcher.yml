@@ -1,0 +1,26 @@
+name: Cygwin launcher PowerShell syntax
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/Invoke-CygwinPhp.ps1'
+      - '.github/workflows/cygwin-launcher.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check PowerShell parse errors
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'tools/Invoke-CygwinPhp.ps1').Path, [ref] $tokens, [ref] $errors) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Output 'Cygwin launcher PowerShell syntax valid'
