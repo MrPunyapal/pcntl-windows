@@ -35,6 +35,9 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     DWORD pid;
     pcntl_win_child *child;
     char enabled[2];
+    SECURITY_ATTRIBUTES attrs;
+    HANDLE probe;
+    DWORD probe_result;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
@@ -54,20 +57,35 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         PCNTL_G(last_error) = ENOSYS;
         RETURN_LONG(-1);
     }
+    memset(&attrs, 0, sizeof(attrs));
+    attrs.nLength = sizeof(attrs);
+    attrs.bInheritHandle = TRUE;
+    probe = CreateEventW(&attrs, TRUE, FALSE, NULL);
+    if (!probe) {
+        PCNTL_G(last_error) = EIO;
+        RETURN_LONG(-1);
+    }
     memset(&info, 0, sizeof(info));
     info.Length = sizeof(info);
     result = clone(PCNTL_NT_CLONE_INHERIT_HANDLES, NULL, NULL, NULL, &info);
 
     if (result == PCNTL_NT_CLONED_CHILD) {
+        /* Pure Win32 event sets a cross-process marker before PHP VM resumes. */
+        SetEvent(probe);
+        CloseHandle(probe);
         /* Clone continues from this exact C call; the PHP VM may have unsafe
          * inherited locks and extension handles. The test must detect that. */
         PCNTL_G(last_error) = 0;
         RETURN_LONG(0);
     }
     if (result < 0 || result != 0 || !info.ProcessHandle) {
+        CloseHandle(probe);
         PCNTL_G(last_error) = EIO;
         RETURN_LONG(-1);
     }
+    probe_result = WaitForSingleObject(probe, 2500);
+    CloseHandle(probe);
+    php_printf("nt-clone-child-reached=%d\n", probe_result == WAIT_OBJECT_0 ? 1 : 0);
     pid = GetProcessId(info.ProcessHandle);
     if (!pid) {
         CloseHandle(info.ProcessHandle);

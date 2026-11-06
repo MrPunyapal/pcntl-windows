@@ -36,6 +36,7 @@ var_dump(pcntl_wexitstatus($status) === 73);
 var_dump($original['marker'] === 113);
 ?>
 --EXPECT--
+nt-clone-child-reached=1
 bool(true)
 bool(true)
 bool(true)
