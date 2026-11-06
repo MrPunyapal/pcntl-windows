@@ -25,11 +25,14 @@ These need real additional runtime capabilities, not stub implementations. [docs
 
 ## Real POSIX PCNTL on Windows via WSL2
 
-Programs requiring genuine pcntl_fork, pcntl_exec, pcntl_unshare or pcntl_setns must run entirely in a Linux PHP interpreter. The project includes a [WSL2 PHP runner](docs/WSL.md) and a [fork/exec conformance test](tests/reference/fork-exec.php). This does not add Linux kernel functionality to the Windows DLL.
+Programs requiring genuine pcntl_fork, pcntl_exec, pcntl_unshare or pcntl_setns must run entirely in a Linux PHP interpreter. The project includes a [WSL2 PHP runner](docs/WSL.md) and a [fork/exec conformance test](tests/reference/fork-exec.php). For PHP 8.5, a [verified Linux source-build workaround](docs/LINUX-SETNS-85.md) restores the missing `pidfd_open` configure check; its CI test successfully creates and joins a Linux network namespace. This does not add Linux kernel functionality to the Windows DLL.
 
 Separate [native platform-reference workflows](docs/PLATFORM-REFERENCES.md) verify FreeBSD rfork and Darwin QoS. Solaris forkx has its own VM reference workflow. Those runtimes are separate from the Windows PHP extension.
 
 Windows-specific process termination is documented in [docs/WINDOWS-TERMINATE.md](docs/WINDOWS-TERMINATE.md).
+
+A separate [Cygwin-linked PHP build experiment](docs/CYGWIN.md) investigates genuine fork-style continuation on Windows. It is experimental and must pass its own fork/exec conformance tests before use.
+
 ## Build and verify
 
 The repo provides a Windows GitHub Actions workflow using the PHP Foundation's official Windows extension builder. Builds target PHP 8.4 / 8.5, x64 and x86, TS and NTS. For every supported configuration, the builder runs the PHPT suite and uploads a php_pcntl.dll build artifact when successful.
