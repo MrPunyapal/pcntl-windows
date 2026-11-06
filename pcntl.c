@@ -364,8 +364,16 @@ PHP_FUNCTION(pcntl_strerror)
     RETURN_STRING(strerror((int) code));
 }
 
+#include "pcntl_extra.h"
+
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
+    PHP_FE(pcntl_getpriority, arginfo_pcntl_getpriority)
+    PHP_FE(pcntl_setpriority, arginfo_pcntl_setpriority)
+    PHP_FE(pcntl_getcpuaffinity, arginfo_pcntl_getcpuaffinity)
+    PHP_FE(pcntl_setcpuaffinity, arginfo_pcntl_setcpuaffinity)
+    PHP_FE(pcntl_getcpu, arginfo_pcntl_getcpu)
+    PHP_FE(pcntl_wifcontinued, arginfo_pcntl_status_bool)
     PHP_FE(pcntl_waitpid, arginfo_pcntl_waitpid)
     PHP_FE(pcntl_wait, arginfo_pcntl_wait)
     PHP_FE(pcntl_wifexited, arginfo_pcntl_status_bool)
@@ -383,6 +391,10 @@ static const zend_function_entry pcntl_functions[] = {
 PHP_MINIT_FUNCTION(pcntl)
 {
     ZEND_INIT_MODULE_GLOBALS(pcntl, pcntl_globals_init, NULL);
+    REGISTER_LONG_CONSTANT("PRIO_PROCESS", PCNTL_PRIO_PROCESS, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("PRIO_PGRP", PCNTL_PRIO_PGRP, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("PRIO_USER", PCNTL_PRIO_USER, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("WCONTINUED", 8, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WNOHANG", PCNTL_WINDOWS_WNOHANG, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_ECHILD", ECHILD, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_EINVAL", EINVAL, CONST_CS | CONST_PERSISTENT);
