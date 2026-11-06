@@ -41,4 +41,6 @@ jobs:
           extensions: pcntl, posix
           coverage: none
       - name: Confirm upstream PCNTL semantics
-        run: php tests/reference/baseline.php
+        run: |
+          php tests/reference/baseline.php
+          php tests/reference/surface.php

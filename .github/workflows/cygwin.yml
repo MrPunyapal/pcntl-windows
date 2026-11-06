@@ -45,3 +45,4 @@ jobs:
           & $env:PCNTL_CYGWIN_PHP -v
           & $env:PCNTL_CYGWIN_PHP -m
           & $env:PCNTL_CYGWIN_PHP tests/reference/baseline.php
+          & $env:PCNTL_CYGWIN_PHP tests/reference/surface.php

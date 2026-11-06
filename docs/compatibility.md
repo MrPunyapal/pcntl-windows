@@ -67,6 +67,10 @@ Current native implementation: **zero PCNTL-compatible functions**. Only distinc
 - `pcntl_windows_wait_process`: uses `OpenProcess`, `WaitForSingleObject`, `GetExitCodeProcess`
 - `pcntl_windows_processor`: uses `GetCurrentProcessorNumberEx`
 
+## Machine-readable upstream comparisons
+
+Both Linux PHP and Cygwin-linked Windows PHP run [tests/reference/surface.php](../tests/reference/surface.php) to audit all 34 function names against the actual installed extension. This test fails when any of the 18 unconditional API entries is missing and records presence of the 16 OS-conditional functions, without pretending that every one should exist on every platform. It also reports the extension's constants count. Actual behavior still requires dedicated tests.
+
 ## Constants and types
 
 Upstream has conditionally defined POSIX signal, priority, wait-status, namespace and platform-specific error constants, plus Darwin's `Pcntl\\QosClass` enum. These are also part of the compatibility scope. A later generated inventory will track constants/type availability by reference OS. Windows must not advertise constants for operations with incorrect semantics.
