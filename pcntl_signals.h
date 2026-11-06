@@ -15,6 +15,21 @@
 static volatile LONG pcntl_pending[32];
 static volatile LONG pcntl_console_enabled = 0;
 static bool pcntl_console_installed = false;
+static volatile LONG pcntl_async_enabled = 0;
+static SRWLOCK pcntl_vm_lock = SRWLOCK_INIT;
+static zend_atomic_bool *pcntl_vm_target = NULL;
+static void (*pcntl_previous_interrupt)(zend_execute_data *) = NULL;
+
+static void pcntl_win_enqueue(int signum)
+{
+    InterlockedIncrement(&pcntl_pending[signum]);
+    if (InterlockedCompareExchange(&pcntl_async_enabled, 0, 0)) {
+        AcquireSRWLockShared(&pcntl_vm_lock);
+        if (pcntl_vm_target) zend_atomic_bool_store_ex(pcntl_vm_target, true);
+        ReleaseSRWLockShared(&pcntl_vm_lock);
+    }
+}
+
 
 static bool pcntl_signal_supported(zend_long signum)
 {
@@ -28,11 +43,11 @@ static BOOL WINAPI pcntl_win_console_handler(DWORD control)
 {
     LONG enabled = InterlockedCompareExchange(&pcntl_console_enabled, 0, 0);
     if (control == CTRL_C_EVENT && (enabled & 1)) {
-        InterlockedIncrement(&pcntl_pending[PCNTL_SIGINT]);
+        pcntl_win_enqueue(PCNTL_SIGINT);
         return TRUE;
     }
     if (control == CTRL_BREAK_EVENT && (enabled & 2)) {
-        InterlockedIncrement(&pcntl_pending[PCNTL_SIGTERM]);
+        pcntl_win_enqueue(PCNTL_SIGTERM);
         return TRUE;
     }
     return FALSE;
@@ -42,7 +57,7 @@ static VOID CALLBACK pcntl_win_alarm_callback(PVOID context, BOOLEAN fired)
 {
     (void) context;
     (void) fired;
-    InterlockedIncrement(&pcntl_pending[PCNTL_SIGALRM]);
+    pcntl_win_enqueue(PCNTL_SIGALRM);
 }
 
 static void pcntl_win_signal_request_init(void)
@@ -53,6 +68,10 @@ static void pcntl_win_signal_request_init(void)
         InterlockedExchange(&pcntl_pending[i], 0);
     }
     PCNTL_G(signal_mask) = 0;
+    PCNTL_G(async_signals) = false;
+    AcquireSRWLockExclusive(&pcntl_vm_lock);
+    pcntl_vm_target = &EG(vm_interrupt);
+    ReleaseSRWLockExclusive(&pcntl_vm_lock);
     PCNTL_G(alarm_timer) = NULL;
     PCNTL_G(alarm_deadline) = 0;
 }
@@ -60,6 +79,10 @@ static void pcntl_win_signal_request_init(void)
 static void pcntl_win_signal_request_shutdown(void)
 {
     int i;
+    InterlockedExchange(&pcntl_async_enabled, 0);
+    AcquireSRWLockExclusive(&pcntl_vm_lock);
+    if (pcntl_vm_target == &EG(vm_interrupt)) pcntl_vm_target = NULL;
+    ReleaseSRWLockExclusive(&pcntl_vm_lock);
     if (PCNTL_G(alarm_timer)) {
         DeleteTimerQueueTimer(NULL, PCNTL_G(alarm_timer), INVALID_HANDLE_VALUE);
         PCNTL_G(alarm_timer) = NULL;
@@ -83,6 +106,9 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_pcntl_signal_get_handler, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, signal, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_signal_dispatch, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_async_signals, 0, 0, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, enable, _IS_BOOL, 1, "null")
 ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_alarm, 0, 1, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, seconds, IS_LONG, 0)
@@ -167,35 +193,72 @@ PHP_FUNCTION(pcntl_windows_raise)
         RETURN_FALSE;
     }
     /* This is a cooperative intra-process event, not POSIX kill(). */
-    InterlockedIncrement(&pcntl_pending[signum]);
+    pcntl_win_enqueue((int) signum);
     PCNTL_G(last_error) = 0;
     RETURN_TRUE;
 }
 
-PHP_FUNCTION(pcntl_signal_dispatch)
+static void pcntl_win_dispatch_signals(void)
 {
     int signum;
-    ZEND_PARSE_PARAMETERS_NONE();
     for (signum = 1; signum < 32; ++signum) {
         LONG i, count;
         zval *handler = &PCNTL_G(signal_handlers)[signum];
+        zval fn;
         if (PCNTL_G(signal_mask) & (((DWORD) 1) << signum)) continue;
         count = InterlockedExchange(&pcntl_pending[signum], 0);
-        if (Z_ISUNDEF_P(handler) || (Z_TYPE_P(handler) == IS_LONG)) {
-            continue; /* default OS dispositions are not synthesized */
-        }
+        if (!count || Z_ISUNDEF_P(handler) || Z_TYPE_P(handler) == IS_LONG) continue;
+        /* Keep the original handler alive even if it changes itself. */
+        ZVAL_COPY(&fn, handler);
         for (i = 0; i < count; ++i) {
-            zval fn, parameter, retval;
-            ZVAL_COPY(&fn, handler);
+            zval parameter, retval;
             ZVAL_LONG(&parameter, signum);
             ZVAL_UNDEF(&retval);
             call_user_function(EG(function_table), NULL, &fn, &retval, 1, &parameter);
             if (!Z_ISUNDEF(retval)) zval_ptr_dtor(&retval);
-            zval_ptr_dtor(&fn);
-            if (EG(exception)) RETURN_THROWS();
+            if (EG(exception)) break;
+        }
+        zval_ptr_dtor(&fn);
+        if (EG(exception)) break;
+    }
+}
+
+static void pcntl_win_interrupt_handler(zend_execute_data *execute_data)
+{
+    if (PCNTL_G(async_signals)) pcntl_win_dispatch_signals();
+    if (pcntl_previous_interrupt) pcntl_previous_interrupt(execute_data);
+}
+
+PHP_FUNCTION(pcntl_signal_dispatch)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    pcntl_win_dispatch_signals();
+    if (EG(exception)) RETURN_THROWS();
+    RETURN_TRUE;
+}
+
+PHP_FUNCTION(pcntl_async_signals)
+{
+    bool enabled = false, is_null = true;
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_BOOL_OR_NULL(enabled, is_null)
+    ZEND_PARSE_PARAMETERS_END();
+    if (is_null) RETURN_BOOL(PCNTL_G(async_signals));
+    RETVAL_BOOL(PCNTL_G(async_signals));
+    PCNTL_G(async_signals) = enabled;
+    InterlockedExchange(&pcntl_async_enabled, enabled ? 1 : 0);
+    if (enabled) {
+        int signum;
+        for (signum = 1; signum < 32; ++signum) {
+            if (InterlockedCompareExchange(&pcntl_pending[signum], 0, 0) > 0) {
+                AcquireSRWLockShared(&pcntl_vm_lock);
+                if (pcntl_vm_target) zend_atomic_bool_store_ex(pcntl_vm_target, true);
+                ReleaseSRWLockShared(&pcntl_vm_lock);
+                break;
+            }
         }
     }
-    RETURN_TRUE;
 }
 
 PHP_FUNCTION(pcntl_alarm)

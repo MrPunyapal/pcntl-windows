@@ -31,6 +31,7 @@ ZEND_BEGIN_MODULE_GLOBALS(pcntl)
     int last_error;
     zval signal_handlers[32];
     DWORD signal_mask;
+    bool async_signals;
     HANDLE alarm_timer;
     ULONGLONG alarm_deadline;
 ZEND_END_MODULE_GLOBALS(pcntl)
@@ -420,6 +421,7 @@ static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_signal, arginfo_pcntl_signal)
     PHP_FE(pcntl_signal_get_handler, arginfo_pcntl_signal_get_handler)
     PHP_FE(pcntl_signal_dispatch, arginfo_pcntl_signal_dispatch)
+    PHP_FE(pcntl_async_signals, arginfo_pcntl_async_signals)
     PHP_FE(pcntl_sigprocmask, arginfo_pcntl_sigprocmask)
     PHP_FE(pcntl_alarm, arginfo_pcntl_alarm)
     PHP_FE(pcntl_sigwaitinfo, arginfo_pcntl_sigwaitinfo)
@@ -472,11 +474,14 @@ PHP_MINIT_FUNCTION(pcntl)
     REGISTER_LONG_CONSTANT("PCNTL_EACCES", EACCES, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_ENOMEM", ENOMEM, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_EAGAIN", EAGAIN, CONST_CS | CONST_PERSISTENT);
+    pcntl_previous_interrupt = zend_interrupt_function;
+    zend_interrupt_function = pcntl_win_interrupt_handler;
     pcntl_console_installed = SetConsoleCtrlHandler(pcntl_win_console_handler, TRUE) != 0;
     return SUCCESS;
 }
 PHP_MSHUTDOWN_FUNCTION(pcntl)
 {
+    if (zend_interrupt_function == pcntl_win_interrupt_handler) zend_interrupt_function = pcntl_previous_interrupt;
     if (pcntl_console_installed) SetConsoleCtrlHandler(pcntl_win_console_handler, FALSE);
     return SUCCESS;
 }
