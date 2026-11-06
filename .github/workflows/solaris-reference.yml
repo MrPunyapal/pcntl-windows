@@ -1,5 +1,10 @@
 name: Solaris PCNTL native forkx reference (manual)
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/solaris-reference.yml'
+      - 'tests/reference/forkx.php'
   workflow_dispatch:
 permissions:
   contents: read
