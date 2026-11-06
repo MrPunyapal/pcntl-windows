@@ -401,6 +401,7 @@ PHP_FUNCTION(pcntl_strerror)
 }
 
 #include "pcntl_extra.h"
+#include "pcntl_waitid.h"
 
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
@@ -410,6 +411,7 @@ static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_setcpuaffinity, arginfo_pcntl_setcpuaffinity)
     PHP_FE(pcntl_getcpu, arginfo_pcntl_getcpu)
     PHP_FE(pcntl_wifcontinued, arginfo_pcntl_status_bool)
+    PHP_FE(pcntl_waitid, arginfo_pcntl_waitid)
     PHP_FE(pcntl_waitpid, arginfo_pcntl_waitpid)
     PHP_FE(pcntl_wait, arginfo_pcntl_wait)
     PHP_FE(pcntl_wifexited, arginfo_pcntl_status_bool)
@@ -431,6 +433,13 @@ PHP_MINIT_FUNCTION(pcntl)
     REGISTER_LONG_CONSTANT("PRIO_PGRP", PCNTL_PRIO_PGRP, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PRIO_USER", PCNTL_PRIO_USER, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WCONTINUED", 8, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("P_ALL", PCNTL_P_ALL, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("P_PID", PCNTL_P_PID, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("P_PGID", PCNTL_P_PGID, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("WEXITED", PCNTL_WEXITED, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("WNOWAIT", PCNTL_WNOWAIT, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CLD_EXITED", PCNTL_CLD_EXITED, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGCHLD", PCNTL_SIGCHLD, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WNOHANG", PCNTL_WINDOWS_WNOHANG, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_ECHILD", ECHILD, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_EINVAL", EINVAL, CONST_CS | CONST_PERSISTENT);
