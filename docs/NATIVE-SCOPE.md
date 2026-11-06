@@ -1,11 +1,26 @@
-# Verified native PCNTL scope
+# Native Windows implementation boundaries
 
-This project is a Windows compatibility experiment, not an unconditional substitute for POSIX pcntl.
+The Windows extension provides 28 upstream PCNTL function names and two helper APIs, with intentionally narrower semantics where Win32 differs from POSIX. The full, maintained function-by-function status is in [COMPATIBILITY.md](COMPATIBILITY.md).
 
-Native functions added: pcntl_getpriority, pcntl_setpriority, pcntl_getcpuaffinity, pcntl_setcpuaffinity, pcntl_getcpu, pcntl_wifcontinued.
+## Confirmed native building blocks
 
-Priority classes map onto coarse POSIX nice-like values. Only PRIO_PROCESS works; changing priority will not enter Windows realtime class. Affinity operates inside the processor group visible to GetProcessAffinityMask. Windows machines with multiple CPU processor groups need a separate CPU-sets backend. pcntl_wifcontinued decodes a POSIX-style status, but this extension does not produce SIGCONT status events.
+- Process spawning: CreateProcessW; process waiting: Win32 handles and WaitForSingleObject.
+- Process accounting: GetProcessTimes and GetProcessMemoryInfo.
+- Scheduling: Windows priority classes, process-affinity masks and processor numbers.
+- Signal subsystem: a cooperative queue fed by console control handlers, in-process injection, and Windows timers; Zend VM interrupt dispatch runs PHP callbacks on PHP's execution thread.
+- QoS-style calls: current-thread Windows priorities mapped to Pcntl\QosClass enum cases.
 
-No native Windows API provides arbitrary live process fork/exec or Linux namespace operations with full POSIX semantics. The missing PCNTL functions still need research and system-level backends. Avoid substituting CreateProcessW for pcntl_fork.
+## Deliberate limitations
 
-Source references: https://github.com/php/php-src/blob/PHP-8.5/ext/pcntl/pcntl.stub.php and https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups
+- Child handles exist only for children created by this request's pcntl_windows_spawn helper, not arbitrary Unix fork descendants or process groups.
+- Status words retain only the low eight bits of Windows exit codes; stop, continue and signal-originated states have no POSIX kernel analogue.
+- Signal masks and synchronous waits cover only extension-managed queued events. They do not install POSIX kernel signal masks or provide arbitrary cross-process POSIX signaling.
+- The current affinity APIs expose one processor group rather than complete CPU Sets on machines with many logical processors.
+- Windows scheduler classes are not numerically equivalent to POSIX nice values or macOS QoS policies.
+- The extension targets one active PHP CLI request per process. Concurrent host-driven ZTS request isolation is not verified.
+
+## Missing kernel operations
+
+The six unexported upstream names are pcntl_fork, pcntl_exec, pcntl_forkx, pcntl_rfork, pcntl_unshare and pcntl_setns. Full behavioral parity requires a compatible runtime and sometimes a different operating-system kernel. See [PORTABILITY.md](PORTABILITY.md).
+
+A successful native Windows build and passing PHPT suite validate this prototype, not production safety or drop-in compatibility.
