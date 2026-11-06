@@ -1,6 +1,10 @@
 // vim:ft=javascript
 ARG_ENABLE('pcntl', 'Native Windows PCNTL experiment (CLI only)', 'no');
+ARG_ENABLE('pcntl-unsafe-clone', 'UNSAFE NT clone research ONLY (never production)', 'no');
 if (PHP_PCNTL != 'no') {
+    if (PHP_PCNTL_UNSAFE_CLONE != 'no') {
+        AC_DEFINE('PHP_PCNTL_UNSAFE_CLONE', 1, 'Enable unsafe process clone experiment');
+    }
     AC_DEFINE('HAVE_PCNTL', 1, 'PCNTL support');
     EXTENSION('pcntl', 'pcntl.c', PHP_PCNTL_SHARED, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1');
 }

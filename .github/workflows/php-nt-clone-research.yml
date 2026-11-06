@@ -1,0 +1,29 @@
+name: UNSAFE native PHP NT clone experiment
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/php-nt-clone-research.yml'
+      - 'pcntl_clone_experiment.h'
+      - 'config.w32'
+      - 'tests/026-unsafe-nt-clone.phpt'
+      - 'pcntl.c'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  php-nt-clone:
+    runs-on: windows-2022
+    timeout-minutes: 18
+    env:
+      PCNTL_UNSAFE_CLONE_TEST: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: '8.5'
+          arch: x64
+          ts: nts
+          args: --enable-pcntl --enable-pcntl-unsafe-clone
+          auth-token: ${{ github.token }}
+          run-tests: 'true'

@@ -522,7 +522,14 @@ PHP_FUNCTION(pcntl_strerror)
 #include "pcntl_sigwait.h"
 #include "pcntl_qos.h"
 
+#ifdef PHP_PCNTL_UNSAFE_CLONE
+#include "pcntl_clone_experiment.h"
+#endif
+
 static const zend_function_entry pcntl_functions[] = {
+#ifdef PHP_PCNTL_UNSAFE_CLONE
+    PHP_FE(pcntl_windows_clone_experimental, arginfo_pcntl_windows_clone_experimental)
+#endif
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
     PHP_FE(pcntl_windows_terminate, arginfo_pcntl_windows_terminate)
     PHP_FE(pcntl_getpriority, arginfo_pcntl_getpriority)
