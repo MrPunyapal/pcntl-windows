@@ -1,0 +1,6 @@
+// vim:ft=javascript
+ARG_ENABLE('pcntl', 'Native Windows PCNTL experiment (CLI only)', 'no');
+if (PHP_PCNTL != 'no') {
+    AC_DEFINE('HAVE_PCNTL', 1, 'PCNTL support');
+    EXTENSION('pcntl', 'pcntl.c', PHP_PCNTL_SHARED, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1');
+}

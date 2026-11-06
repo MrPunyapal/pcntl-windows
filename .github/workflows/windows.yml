@@ -1,0 +1,28 @@
+name: Windows extension PoC
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: PHP ${{ matrix.php }} / ${{ matrix.ts }} / x64
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+        ts: ['nts', 'ts']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: ${{ matrix.php }}
+          arch: x64
+          ts: ${{ matrix.ts }}
+          args: --enable-pcntl
+          auth-token: ${{ github.token }}
+          run-tests: 'true'
