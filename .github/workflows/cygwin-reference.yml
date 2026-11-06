@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/cygwin-reference.yml'
       - 'tools/build-cygwin-php.sh'
+      - '.gitattributes'
       - 'tests/reference/fork-exec.php'
       - 'tests/reference/fixtures/exec-child.php'
   workflow_dispatch:
