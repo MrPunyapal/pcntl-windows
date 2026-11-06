@@ -18,3 +18,5 @@ Run tools/posix-capabilities.php to list all 34 conditional upstream function na
 See tests/reference/fork-exec.php for a genuine fork/exec conformance test.
 
 The PowerShell wrapper's syntax is checked in Windows CI. A real WSL2 machine is still required to validate path translation, distribution selection and CLI argument forwarding end-to-end.
+
+Linux CI also runs an isolated namespace conformance test: `tests/reference/linux-namespace-conformance.php`. It creates a fresh network namespace with `pcntl_unshare` and attempts to join that namespace using `pcntl_setns` from a different forked PHP child. The parent process retains its own network namespace. This test prints `PASS` only after verifying namespace identity changes. It prints `SKIP` when the Linux kernel disallows namespace creation or joining; an exit code of zero alone is not evidence that the namespace feature passed.
