@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-if (PHP_OS_FAMILY === 'Windows' || !extension_loaded('pcntl') || !extension_loaded('posix')) {
+if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
     fwrite(STDERR, "Requires genuine POSIX PHP with PCNTL and POSIX extensions.\n");
     exit(1);
 }

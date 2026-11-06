@@ -1,0 +1,47 @@
+name: Cygwin PCNTL reference experiment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/cygwin.yml"
+      - "tests/reference/**"
+  push:
+    paths:
+      - ".github/workflows/cygwin.yml"
+      - "tests/reference/**"
+
+permissions:
+  contents: read
+
+jobs:
+  posix-runtime-on-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download and verify pinned Cygwin PHP 8.5 reference build
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/swoole/build-static-php/releases/download/v1.18.1/php-cli-v8.5.8-cygwin-x64.zip'
+          $expected = 'bcb263d98162941c71599c9aaf7edff21350fcecbd7fd7cb75c714fe1f18ac99'
+          $zip = Join-Path $env:RUNNER_TEMP 'php-cygwin.zip'
+          $dest = Join-Path $env:RUNNER_TEMP 'php-cygwin'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $actual = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Cygwin PHP SHA-256 mismatch: $actual"
+          }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $php = Get-ChildItem -Path $dest -Recurse -File |
+            Where-Object { $_.Name -in @('php.exe', 'php-cli.exe') } |
+            Select-Object -First 1
+          if ($null -eq $php) {
+            throw 'Unable to locate a Cygwin PHP executable in the release archive'
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "PCNTL_CYGWIN_PHP=$($php.FullName)" -Encoding utf8
+      - name: Verify POSIX PCNTL behavior on a Windows host
+        shell: pwsh
+        run: |
+          & $env:PCNTL_CYGWIN_PHP -v
+          & $env:PCNTL_CYGWIN_PHP -m
+          & $env:PCNTL_CYGWIN_PHP tests/reference/baseline.php

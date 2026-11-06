@@ -20,6 +20,10 @@ We are researching two approaches:
 
 The extension deliberately exposes neither `pcntl_fork` nor the `pcntl` module name. These primitives are experimental building blocks, not completion of the PCNTL requirements.
 
+## Windows-hosted POSIX baseline
+
+A separate [Cygwin comparison workflow](.github/workflows/cygwin.yml) experiments with an existing third-party Cygwin-linked PHP 8.5 runtime and executes genuine upstream PCNTL fork/wait/signal behavior checks. It verifies the download against its pinned SHA-256 digest. It does not create a native `php_pcntl.dll` or count as passing the native compatibility goal.
+
 ## Build
 
 The [CI workflow](.github/workflows/ci.yml) uses the [official PHP Windows extension builder](https://github.com/php/php-windows-builder) to compile and test this extension against PHP 8.5 on Windows x64 TS and NTS, using the configuration flag:

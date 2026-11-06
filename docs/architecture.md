@@ -28,6 +28,12 @@ OS-specific functions have guarded availability even on Unix: Linux namespaces, 
 
 The first `wait_process` research primitive uses `OpenProcess` by PID; it has a deliberate lifetime/PID reuse race. Real process ownership requires retaining handles from creation time. Windows exit codes are full 32-bit values, unlike the POSIX 8-bit exit code carried in wait-status encoding.
 
+## Windows-hosted POSIX-runtime verification
+
+An independent optional CI workflow downloads a checksum-pinned PHP 8.5 Cygwin runtime from the third-party [swoole/build-static-php v1.18.1](https://github.com/swoole/build-static-php/releases/tag/v1.18.1) release. This is not a trusted native PHP extension or a complete upstream parity claim; it is only a reference test harness for a Windows host with a POSIX runtime. The GitHub release SHA-256 digest is checked before execution. Once verified, the reference test requires real `pcntl` and `posix` modules and exercises fork, waitpid, and SIGUSR1 delivery.
+
+A production-quality track A needs a reproducible source build, provenance, upstream PCNTL PHPT conformance, and repeated fork/signal stress tests. Vendor binaries are never included in this repository.
+
 ## Release criteria
 
 - Official Windows builder passes for PHP 8.5 x64 TS and NTS.
