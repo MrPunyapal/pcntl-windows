@@ -407,6 +407,7 @@ PHP_FUNCTION(pcntl_strerror)
 #include "pcntl_extra.h"
 #include "pcntl_waitid.h"
 #include "pcntl_signals.h"
+#include "pcntl_sigwait.h"
 
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
@@ -421,6 +422,8 @@ static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_signal_dispatch, arginfo_pcntl_signal_dispatch)
     PHP_FE(pcntl_sigprocmask, arginfo_pcntl_sigprocmask)
     PHP_FE(pcntl_alarm, arginfo_pcntl_alarm)
+    PHP_FE(pcntl_sigwaitinfo, arginfo_pcntl_sigwaitinfo)
+    PHP_FE(pcntl_sigtimedwait, arginfo_pcntl_sigtimedwait)
     PHP_FE(pcntl_windows_raise, arginfo_pcntl_windows_raise)
     PHP_FE(pcntl_waitid, arginfo_pcntl_waitid)
     PHP_FE(pcntl_waitpid, arginfo_pcntl_waitpid)
