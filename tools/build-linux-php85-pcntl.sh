@@ -39,6 +39,6 @@ if (!extension_loaded("pcntl") || !function_exists("pcntl_setns")) {
 echo "PHP 8.5 pcntl_setns is available\n";
 '
 "$binary" -n "$repo/tests/reference/fork-exec.php"
-if [ "$PCNTL_TEST_NAMESPACE" = "1" ]; then
+if [ "${PCNTL_TEST_NAMESPACE:-0}" = "1" ]; then
     "$binary" -n "$repo/tests/reference/linux-namespace-conformance.php"
 fi
