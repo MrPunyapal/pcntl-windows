@@ -29,6 +29,10 @@ typedef struct pcntl_win_child {
 ZEND_BEGIN_MODULE_GLOBALS(pcntl)
     pcntl_win_child *children;
     int last_error;
+    zval signal_handlers[32];
+    DWORD signal_mask;
+    HANDLE alarm_timer;
+    ULONGLONG alarm_deadline;
 ZEND_END_MODULE_GLOBALS(pcntl)
 ZEND_DECLARE_MODULE_GLOBALS(pcntl)
 #define PCNTL_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(pcntl, v)
@@ -402,6 +406,7 @@ PHP_FUNCTION(pcntl_strerror)
 
 #include "pcntl_extra.h"
 #include "pcntl_waitid.h"
+#include "pcntl_signals.h"
 
 static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
@@ -411,6 +416,12 @@ static const zend_function_entry pcntl_functions[] = {
     PHP_FE(pcntl_setcpuaffinity, arginfo_pcntl_setcpuaffinity)
     PHP_FE(pcntl_getcpu, arginfo_pcntl_getcpu)
     PHP_FE(pcntl_wifcontinued, arginfo_pcntl_status_bool)
+    PHP_FE(pcntl_signal, arginfo_pcntl_signal)
+    PHP_FE(pcntl_signal_get_handler, arginfo_pcntl_signal_get_handler)
+    PHP_FE(pcntl_signal_dispatch, arginfo_pcntl_signal_dispatch)
+    PHP_FE(pcntl_sigprocmask, arginfo_pcntl_sigprocmask)
+    PHP_FE(pcntl_alarm, arginfo_pcntl_alarm)
+    PHP_FE(pcntl_windows_raise, arginfo_pcntl_windows_raise)
     PHP_FE(pcntl_waitid, arginfo_pcntl_waitid)
     PHP_FE(pcntl_waitpid, arginfo_pcntl_waitpid)
     PHP_FE(pcntl_wait, arginfo_pcntl_wait)
@@ -440,6 +451,17 @@ PHP_MINIT_FUNCTION(pcntl)
     REGISTER_LONG_CONSTANT("WNOWAIT", PCNTL_WNOWAIT, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("CLD_EXITED", PCNTL_CLD_EXITED, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("SIGCHLD", PCNTL_SIGCHLD, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIG_DFL", PCNTL_SIG_DFL, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIG_IGN", PCNTL_SIG_IGN, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGHUP", PCNTL_SIGHUP, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGINT", PCNTL_SIGINT, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGUSR1", PCNTL_SIGUSR1, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGUSR2", PCNTL_SIGUSR2, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGALRM", PCNTL_SIGALRM, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIGTERM", PCNTL_SIGTERM, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIG_BLOCK", PCNTL_SIG_BLOCK, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIG_UNBLOCK", PCNTL_SIG_UNBLOCK, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("SIG_SETMASK", PCNTL_SIG_SETMASK, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WNOHANG", PCNTL_WINDOWS_WNOHANG, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_ECHILD", ECHILD, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_EINVAL", EINVAL, CONST_CS | CONST_PERSISTENT);
@@ -447,6 +469,12 @@ PHP_MINIT_FUNCTION(pcntl)
     REGISTER_LONG_CONSTANT("PCNTL_EACCES", EACCES, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_ENOMEM", ENOMEM, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PCNTL_EAGAIN", EAGAIN, CONST_CS | CONST_PERSISTENT);
+    pcntl_console_installed = SetConsoleCtrlHandler(pcntl_win_console_handler, TRUE) != 0;
+    return SUCCESS;
+}
+PHP_MSHUTDOWN_FUNCTION(pcntl)
+{
+    if (pcntl_console_installed) SetConsoleCtrlHandler(pcntl_win_console_handler, FALSE);
     return SUCCESS;
 }
 PHP_RINIT_FUNCTION(pcntl)
@@ -456,10 +484,12 @@ PHP_RINIT_FUNCTION(pcntl)
 #endif
     PCNTL_G(children) = NULL;
     PCNTL_G(last_error) = 0;
+    pcntl_win_signal_request_init();
     return SUCCESS;
 }
 PHP_RSHUTDOWN_FUNCTION(pcntl)
 {
+    pcntl_win_signal_request_shutdown();
     pcntl_win_child *child = PCNTL_G(children), *next;
     while (child) {
         next = child->next;
@@ -482,7 +512,7 @@ zend_module_entry pcntl_module_entry = {
     "pcntl",
     pcntl_functions,
     PHP_MINIT(pcntl),
-    NULL,
+    PHP_MSHUTDOWN(pcntl),
     PHP_RINIT(pcntl),
     PHP_RSHUTDOWN(pcntl),
     PHP_MINFO(pcntl),
