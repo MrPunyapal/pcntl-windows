@@ -13,6 +13,25 @@ cd "$source"
 
 export PATH="/usr/bin:/bin:$PATH"
 export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+# Cygwin's package index does not currently include re2c. Build a pinned
+# upstream release instead of bypassing PHP's configure requirements.
+if ! command -v re2c >/dev/null 2>&1; then
+    tempdir="$(mktemp -d)"
+    trap 'rm -rf "$tempdir"' EXIT
+    curl -fL --retry 3 --silent --show-error \
+        https://github.com/skvadrik/re2c/releases/download/4.6/re2c-4.6.tar.xz \
+        -o "$tempdir/re2c.tar.xz"
+    tar -xJf "$tempdir/re2c.tar.xz" -C "$tempdir"
+    (
+        cd "$tempdir/re2c-4.6"
+        ./configure --disable-docs --prefix=/usr/local
+        make -j2
+        make install
+    )
+    re2c --version
+fi
+
+cd "$source"
 ./buildconf --force
 ./configure \
     --disable-all \

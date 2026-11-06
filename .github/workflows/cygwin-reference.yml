@@ -31,7 +31,7 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri 'https://cygwin.com/setup-x86_64.exe' -OutFile "$env:RUNNER_TEMP\setup-x86_64.exe"
-          $packages = 'gcc-core,make,autoconf,automake,libtool,git,bison,libxml2-devel,libpcre2-devel,libsqlite3-devel,pkg-config,libiconv-devel,zlib-devel'
+          $packages = 'gcc-core,gcc-g++,python3,curl,make,autoconf,automake,libtool,git,bison,libxml2-devel,libpcre2-devel,libsqlite3-devel,pkg-config,libiconv-devel,zlib-devel'
           $cache = Join-Path $env:RUNNER_TEMP 'cygwin-cache'
           New-Item -Path $cache -ItemType Directory -Force | Out-Null
           # Cygwin setup is a GUI-subsystem executable: PowerShell call operator
