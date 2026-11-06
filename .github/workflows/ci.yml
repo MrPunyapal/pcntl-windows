@@ -1,0 +1,42 @@
+name: PCNTL Windows research
+
+on:
+  push:
+    branches: [main, "poc/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-extension:
+    name: Windows PHP 8.5 x64
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        ts: [nts, ts]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and test experimental native extension
+        uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: "8.5"
+          arch: x64
+          ts: ${{ matrix.ts }}
+          args: --enable-pcntl-windows
+          run-tests: "true"
+
+  reference-pcntl:
+    name: Linux upstream behavior baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: pcntl, posix
+          coverage: none
+      - name: Confirm upstream PCNTL semantics
+        run: php tests/reference/baseline.php

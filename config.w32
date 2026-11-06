@@ -1,0 +1,6 @@
+// vim:ft=javascript
+ARG_ENABLE("pcntl-windows", "experimental native Windows process control", "no");
+if (PHP_PCNTL_WINDOWS != "no") {
+    EXTENSION("pcntl_windows", "pcntl_windows.c");
+    AC_DEFINE("HAVE_PCNTL_WINDOWS", 1, "Native Windows process-control experiment");
+}

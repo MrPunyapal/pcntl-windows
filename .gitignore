@@ -1,0 +1,14 @@
+/artifacts/
+/build/
+/.Release/
+/Debug/
+/x64/
+*.obj
+*.pch
+*.pdb
+*.dll
+*.lib
+*.exp
+*.ilk
+*.exe
+*.log
