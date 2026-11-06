@@ -7,11 +7,15 @@ Invalid child, flags and missing executable fail explicitly
 var_dump(pcntl_waitpid(99999999, $s));
 var_dump(pcntl_errno() === PCNTL_ECHILD);
 var_dump(pcntl_waitpid(-2, $s));
+var_dump(pcntl_errno() === PCNTL_ECHILD);
+var_dump(pcntl_waitpid(PHP_INT_MIN, $s));
 var_dump(pcntl_errno() === PCNTL_EINVAL);
 var_dump(pcntl_windows_spawn('Z:\\nonexistent\\nothere.exe'));
 var_dump(pcntl_errno() === PCNTL_ENOENT);
 ?>
 --EXPECT--
+int(-1)
+bool(true)
 int(-1)
 bool(true)
 int(-1)
