@@ -22,6 +22,7 @@
 
 typedef struct pcntl_win_child {
     DWORD pid;
+    DWORD group_id; /* 0 = inherited/default; PID = new Windows console group */
     HANDLE handle;
     HANDLE wait_registration;
     volatile LONG sigchld_sent;
@@ -164,6 +165,7 @@ static wchar_t *pcntl_quote_argv(wchar_t **argv, size_t argc)
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_pcntl_windows_spawn, 0, 1, MAY_BE_LONG|MAY_BE_FALSE)
     ZEND_ARG_TYPE_INFO(0, executable, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, arguments, IS_ARRAY, 0, "[]")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, new_process_group, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_waitpid, 0, 2, IS_LONG, 0)
@@ -256,11 +258,13 @@ PHP_FUNCTION(pcntl_windows_spawn)
     PROCESS_INFORMATION process;
     pcntl_win_child *child;
     bool invalid = false;
+    bool new_process_group = false;
 
-    ZEND_PARSE_PARAMETERS_START(1, 2)
+    ZEND_PARSE_PARAMETERS_START(1, 3)
         Z_PARAM_STR(executable)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_HT(arguments)
+        Z_PARAM_BOOL(new_process_group)
     ZEND_PARSE_PARAMETERS_END();
 
     if (ZSTR_LEN(executable) == 0) {
@@ -295,13 +299,15 @@ PHP_FUNCTION(pcntl_windows_spawn)
         memset(&startup, 0, sizeof(startup));
         startup.cb = sizeof(startup);
         memset(&process, 0, sizeof(process));
-        if (!CreateProcessW(argv[0], command_line, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &process)) {
+        if (!CreateProcessW(argv[0], command_line, NULL, NULL, FALSE,
+                new_process_group ? CREATE_NEW_PROCESS_GROUP : 0, NULL, NULL, &startup, &process)) {
             PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
             invalid = true;
         } else {
             CloseHandle(process.hThread);
             child = emalloc(sizeof(pcntl_win_child));
             child->pid = process.dwProcessId;
+            child->group_id = new_process_group ? process.dwProcessId : 0;
             child->handle = process.hProcess;
             child->wait_registration = NULL;
             child->sigchld_sent = 0;
@@ -360,7 +366,8 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
     pcntl_win_child *node, *selected = NULL, **link;
     DWORD result, exit_code;
 
-    if ((flags & ~PCNTL_WINDOWS_WNOHANG) != 0 || pid == 0 || pid < -1) {
+    if ((flags & ~PCNTL_WINDOWS_WNOHANG) != 0
+        || (pid < -1 && (pid == ZEND_LONG_MIN || (uint64_t)(-pid) > UINT32_MAX))) {
         PCNTL_G(last_error) = EINVAL;
         return -1;
     }
@@ -385,7 +392,13 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
         selected = node;
     } else {
         for (;;) {
+            bool found = false;
             for (node = PCNTL_G(children); node; node = node->next) {
+                /* Process-group filtering is scoped to explicitly registered
+                 * Win32 child handles, not the global POSIX process table. */
+                if (pid == 0 && node->group_id != 0) continue;
+                if (pid < -1 && node->group_id != (DWORD)(-pid)) continue;
+                found = true;
                 result = WaitForSingleObject(node->handle, 0);
                 if (result == WAIT_OBJECT_0) {
                     selected = node;
@@ -397,6 +410,10 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
                 }
             }
             if (selected) break;
+            if (!found) {
+                PCNTL_G(last_error) = ECHILD;
+                return -1;
+            }
             if (flags & PCNTL_WINDOWS_WNOHANG) return 0;
             Sleep(10); /* Bounded-latency poll; replace with threadpool waits later. */
         }

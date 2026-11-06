@@ -30,8 +30,9 @@ PHP_FUNCTION(pcntl_waitid)
         Z_PARAM_LONG(flags)
         Z_PARAM_ZVAL(usage)
     ZEND_PARSE_PARAMETERS_END();
-    if ((idtype != PCNTL_P_ALL && idtype != PCNTL_P_PID)
-        || (idtype == PCNTL_P_PID && (null_id || id <= 0))
+    if ((idtype != PCNTL_P_ALL && idtype != PCNTL_P_PID && idtype != PCNTL_P_PGID)
+        || (idtype == PCNTL_P_PID && (null_id || id <= 0 || (uint64_t) id > UINT32_MAX))
+        || (idtype == PCNTL_P_PGID && (id < 0 || (uint64_t) id > UINT32_MAX))
         || !(flags & PCNTL_WEXITED)
         || (flags & ~(PCNTL_WEXITED | PCNTL_WNOWAIT | PCNTL_WINDOWS_WNOHANG))) {
         PCNTL_G(last_error) = EINVAL;
@@ -41,6 +42,7 @@ PHP_FUNCTION(pcntl_waitid)
         bool found = false;
         for (node = PCNTL_G(children); node; node = node->next) {
             if (idtype == PCNTL_P_PID && id != (zend_long) node->pid) continue;
+            if (idtype == PCNTL_P_PGID && id != (zend_long) node->group_id) continue;
             found = true;
             result = WaitForSingleObject(node->handle, 0);
             if (result == WAIT_OBJECT_0) { selected = node; break; }
