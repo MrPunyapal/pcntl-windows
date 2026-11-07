@@ -37,6 +37,10 @@ The [platform-reference workflows](docs/PLATFORM-REFERENCES.md) have also passed
 
 The Windows-specific `pcntl_windows_terminate` helper is described in [docs/WINDOWS-TERMINATE.md](docs/WINDOWS-TERMINATE.md).
 
+## Install with PIE (after the first release)
+
+PIE can install prebuilt DLLs on native Windows PHP. The [PIE packaging and release workflow](docs/PIE.md) is set up for PHP 8.4/8.5, x86/x64 and TS/NTS. A published GitHub release plus Packagist registration are required before the package can be installed with `pie install mrpunyapal/pcntl-windows`. Until then, use CI build artifacts. This remains an **experimental** Windows compatibility extension, not full Unix PCNTL.
+
 ## Build and verify
 
 The repo provides a Windows GitHub Actions workflow using the PHP Foundation's official Windows extension builder. Builds target PHP 8.4 / 8.5, x64 and x86, TS and NTS. For every supported configuration, the builder runs the PHPT suite and uploads a php_pcntl.dll build artifact when successful.

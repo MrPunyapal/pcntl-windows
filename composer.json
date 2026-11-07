@@ -1,0 +1,18 @@
+{
+    "name": "mrpunyapal/pcntl-windows",
+    "description": "Experimental native Windows PHP PCNTL compatibility extension (not a Unix PCNTL drop-in)",
+    "type": "php-ext",
+    "require": {
+        "php": ">=8.4 <8.6"
+    },
+    "php-ext": {
+        "extension-name": "pcntl",
+        "os-families": [
+            "windows"
+        ]
+    },
+    "support": {
+        "source": "https://github.com/MrPunyapal/pcntl-windows",
+        "issues": "https://github.com/MrPunyapal/pcntl-windows/issues"
+    }
+}
