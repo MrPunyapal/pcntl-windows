@@ -1,13 +1,13 @@
 # Native Windows implementation boundaries
 
-The Windows extension provides 28 upstream PCNTL function names and two helper APIs, with intentionally narrower semantics where Win32 differs from POSIX. The full, maintained function-by-function status is in [COMPATIBILITY.md](COMPATIBILITY.md).
+The Windows extension provides 28 upstream PCNTL function names and three Windows-specific helpers (`pcntl_windows_spawn`, `pcntl_windows_terminate`, and `pcntl_windows_raise`), with intentionally narrower semantics where Win32 differs from POSIX. The full, maintained function-by-function status is in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 ## Confirmed native building blocks
 
 - Process spawning: CreateProcessW; process waiting: Win32 handles, WaitForSingleObject and threadpool child-exit notifications for scalable any-child waiting.
 - Process accounting: GetProcessTimes and GetProcessMemoryInfo.
 - Scheduling: Windows priority classes, process-affinity masks and processor numbers.
-- Signal subsystem: a cooperative queue fed by console control handlers, in-process injection, and Windows timers; Zend VM interrupt dispatch runs PHP callbacks on PHP's execution thread.
+- Signal subsystem: a cooperative queue fed by console control handlers, registered child-exit notifications, in-process injection, and Windows timers; Zend VM interrupt dispatch runs PHP callbacks on PHP's execution thread.
 - QoS-style calls: current-thread Windows priorities mapped to Pcntl\QosClass enum cases.
 
 ## Deliberate limitations

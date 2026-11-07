@@ -29,8 +29,8 @@ Target: the full conditional set of 34 function names declared by PHP 8.5's ext/
 
 ## Not exported: requirements for genuine support
 
-- pcntl_fork: requires continuing in both parent and child from the same C/PHP instruction with copied address space, heap, stack and resources. CreateProcessW is not a fork. A Cygwin-style runtime port or dedicated PHP runtime cooperation is required.
-- pcntl_exec: POSIX exec replaces the current process image while preserving identity; ordinary Windows process creation makes a new PID. A supervisor handoff is a different contract.
+- pcntl_fork: requires continuing in both parent and child from the same C/PHP instruction with copied address space, heap, stack and resources. CreateProcessW is not a fork. A separate Cygwin-linked PHP 8.5 interpreter now passes actual fork/exec and nested-fork conformance; the function is still absent from the native Windows DLL.
+- pcntl_exec: POSIX exec replaces the current process image while preserving identity; ordinary Windows process creation makes a new PID. A separate Cygwin PHP build passed exec process-identity conformance; a Win32 supervisor handoff is not an equivalent contract.
 - pcntl_forkx: Solaris-specific semantics and flags need a Solaris implementation or separately defined equivalent.
 - pcntl_rfork: BSD-specific process and resource-sharing flags need a compatible BSD runtime.
 - pcntl_unshare: Linux kernel namespace creation needs a Linux execution context for its guarantees.
@@ -53,12 +53,13 @@ Primary sources:
 
 ## Alternate native POSIX runtime validation
 
-- WSL2 Linux PHP: real fork/exec conformance is covered by tests/reference/fork-exec.php; Linux namespace capabilities are probed separately and depend on privileges.
+- Cygwin PHP 8.5: [CI passed](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809) real fork/exec, nested forks, copied PHP heap and stream inheritance. This separate Cygwin interpreter exposes 27 of 34 conditional PCNTL names and is not binary-compatible with ordinary Windows PHP.
+- WSL2 Linux PHP: real fork/exec conformance is covered by tests/reference/fork-exec.php; Linux source-build CI also verified network namespace creation and joining when permitted.
 - FreeBSD PHP: rfork is tested in tests/reference/rfork.php on a FreeBSD VM.
-- Solaris/illumos PHP: forkx is tested in tests/reference/forkx.php on a Solaris VM when available.
+- Solaris/illumos PHP: [forkx conformance passed](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42297736941) with PCNTL-enabled PHP 8.4 in a Solaris VM.
 - macOS PHP: Apple QoS is validated in tests/reference/darwin-qos.php.
 - Native Win32 helpers pcntl_windows_spawn, pcntl_windows_terminate and pcntl_windows_raise are not upstream PCNTL functions and must not be confused with true Unix process semantics.
 
-See docs/WSL.md and docs/PLATFORM-REFERENCES.md for runtime details.
+See [CYGWIN.md](CYGWIN.md), [WSL.md](WSL.md) and [PLATFORM-REFERENCES.md](PLATFORM-REFERENCES.md) for runtime details. The native Windows DLL rejects overlapping PHP requests to prevent corruption of its process-wide signal queue; this is not concurrent ZTS support.
 
 Windows group waiting: pcntl_windows_spawn($exe, $args, true) starts a new Win32 process group. The group id is the returned PID. pcntl_waitpid(-$pid, ...) and pcntl_waitid(P_PGID, $pid, ...) select only registered children in that group. pcntl_waitpid(0, ...) selects children spawned without the new-process-group option. This does **not** support POSIX setpgid, user process groups, or waiting for arbitrary external processes.

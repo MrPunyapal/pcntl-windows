@@ -4,7 +4,7 @@ Experimental standalone C test of undocumented RtlCloneUserProcess, completely i
 
 ## What is tested
 
-`research/rtl-clone.c` resolves `RtlCloneUserProcess` from ntdll, clones its own simple C process, checks that the child continues from the clone return point, changes its private memory, terminates via `NtTerminateProcess`, then confirms that the parent's memory is intact and the child exit status is 39. The job runs on Windows and has a short timeout. Do **not** call this from PHP yet.
+`research/rtl-clone.c` resolves `RtlCloneUserProcess` from ntdll, clones its own simple C process, checks that the child continues from the clone return point, changes its private memory, terminates via `NtTerminateProcess`, then confirms that the parent's memory is intact and the child exit status is 39. The job runs on Windows and has a short timeout. An isolated, special-build PHP clone experiment **has already been attempted and failed**: after reaching the native child path, the cloned PHP VM hung. See [PHP-NT-CLONE.md](PHP-NT-CLONE.md). Do not use this experiment in production.
 
 ## Why this is NOT a PHP implementation
 

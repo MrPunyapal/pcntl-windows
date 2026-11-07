@@ -6,7 +6,7 @@ Available: pcntl_signal, pcntl_signal_get_handler, pcntl_signal_dispatch, pcntl_
 
 Known differences: SIGUSR1, SIGUSR2 and SIGHUP have no native OS delivery source (they can be sent through pcntl_windows_raise). SIGCHLD is now enqueued when a registered child exits, using Windows threadpool wait callbacks and a single-delivery guard; this does not notify for arbitrary unrelated processes. Standard POSIX signal masks apply only to extension-owned cooperative events. SIG_DFL does not synthesize Unix signal dispositions for injected events. Restarting interrupted system calls is not supported. pcntl_alarm schedules a Windows timer; handlers are dispatched automatically only with pcntl_async_signals(true), otherwise explicitly via pcntl_signal_dispatch. No POSIX siginfo metadata or process-directed kill is guaranteed.
 
-Do not treat pcntl_windows_raise as posix_kill. The VM interrupt bridge targets one active CLI request per process. Concurrent PHP requests in a ZTS host, real POSIX signal delivery, and POSIX syscall interruption/restart semantics are not guaranteed.
+Do not treat pcntl_windows_raise as posix_kill. The VM interrupt bridge targets one active CLI request per process. Overlapping requests in a ZTS host are **rejected during PHP module request initialization** because the signal queue and VM interrupt target are process-wide. Real POSIX signal delivery and POSIX syscall interruption/restart semantics remain unavailable.
 
 Synchronous signal waits consume extension-managed pending events only. Timeout handling uses Windows millisecond scheduling and may exceed a requested nanosecond interval. These calls do not receive arbitrary process-directed POSIX kernel signals.
 

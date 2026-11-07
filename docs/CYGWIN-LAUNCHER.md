@@ -12,6 +12,8 @@ If PHP is built outside the Cygwin install prefix:
 
 Use `-PhpArguments @('--name', 'two words')` to pass separate arguments. The launcher converts the script path through Cygwin's `cygpath.exe`, prepends Cygwin runtime DLL location to PATH, verifies real PCNTL is loaded, and then runs the script without a shell.
 
-The launcher is useful only if Cygwin PHP itself builds and passes the fork/exec conformance tests; PHP 8.5 compatibility is still experimental. This tool never modifies or enables PCNTL in a running official Windows PHP process.
+**Verified:** A Cygwin-linked PHP 8.5.14-dev CLI built and passed fork/exec and nested-fork tests on November 7, 2026. Download `cygwin-php85-pcntl-x64` from the [successful CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809), extract `php.exe`, and pass its Windows path with `-PhpBinary`. The artifact expires November 21, 2026, and needs a compatible Cygwin runtime and dependent DLL packages installed separately. The tested interpreter is still experimental.
+
+This tool never enables PCNTL in an already-running official Windows PHP process.
 
 See docs/CYGWIN.md and https://cygwin.com/cygwin-ug-net/highlights.html for Cygwin fork limitations.

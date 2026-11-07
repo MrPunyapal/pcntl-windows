@@ -23,15 +23,19 @@ Experimental native Windows implementation of PHP process-control APIs, tested w
 
 These need real additional runtime capabilities, not stub implementations. [docs/PORTABILITY.md](docs/PORTABILITY.md) covers Windows-native, Cygwin, WSL2 and platform-specific backends.
 
-## Real POSIX PCNTL on Windows via WSL2
+## Genuine fork/exec on Windows through Cygwin PHP
 
-Programs requiring genuine pcntl_fork, pcntl_exec, pcntl_unshare or pcntl_setns must run entirely in a Linux PHP interpreter. The project includes a [WSL2 PHP runner](docs/WSL.md) and a [fork/exec conformance test](tests/reference/fork-exec.php). For PHP 8.5, a [verified Linux source-build workaround](docs/LINUX-SETNS-85.md) restores the missing `pidfd_open` configure check; its CI test successfully creates and joins a Linux network namespace. This does not add Linux kernel functionality to the Windows DLL.
+**Verified on November 7, 2026:** A separate Cygwin-linked PHP **8.5.14-dev CLI** passed real `pcntl_fork()` / `pcntl_exec()` conformance, including nested forks, heap isolation, inherited PHP streams and child wait statuses. The [passing CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809) published a [`cygwin-php85-pcntl-x64` artifact](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809/artifacts/13575890455) (expires November 21, 2026). The [build script](tools/build-cygwin-php.sh) can recreate it.
 
-Separate [native platform-reference workflows](docs/PLATFORM-REFERENCES.md) verify FreeBSD rfork and Darwin QoS. Solaris forkx has its own VM reference workflow. Those runtimes are separate from the Windows PHP extension.
+**This is an entirely separate PHP executable, not an extension for standard MSVC-built Windows PHP.** It requires the Cygwin runtime and dependent DLLs, and the tested build exposes **27/34** conditional PCNTL names. Cygwin does not supply Linux namespaces, Solaris `forkx`, BSD `rfork` or Darwin QoS. See [Cygwin setup and test scope](docs/CYGWIN.md) and the [PowerShell launcher](docs/CYGWIN-LAUNCHER.md). It is experimental and not a production compatibility certification.
 
-Windows-specific process termination is documented in [docs/WINDOWS-TERMINATE.md](docs/WINDOWS-TERMINATE.md).
+## Genuine Linux PCNTL via WSL2
 
-A separate [Cygwin-linked PHP build experiment](docs/CYGWIN.md) investigates genuine fork-style continuation on Windows. It is experimental and must pass its own fork/exec conformance tests before use.
+Run the *entire PHP script* in Linux under [WSL2](docs/WSL.md) for genuine Linux `fork`, `exec`, `unshare` and `setns`. For PHP 8.5, the [verified Linux source-build workaround](docs/LINUX-SETNS-85.md) restores the missing `pidfd_open` check; its CI test created and joined a Linux network namespace. These calls do not become available inside a native Windows PHP process.
+
+The [platform-reference workflows](docs/PLATFORM-REFERENCES.md) have also passed FreeBSD `rfork`, Solaris `forkx` and macOS QoS tests on their respective operating systems. They do not load into the Windows DLL.
+
+The Windows-specific `pcntl_windows_terminate` helper is described in [docs/WINDOWS-TERMINATE.md](docs/WINDOWS-TERMINATE.md).
 
 ## Build and verify
 
@@ -58,6 +62,6 @@ echo pcntl_wexitstatus($status); // 37
 
 The supported signal queue does not implement arbitrary POSIX process-directed signals, Linux syscall interruption semantics, or native Unix signal dispositions. Some functions return narrowed Windows-derived results, and several POSIX-specific constants are intentionally absent. Use the helper pcntl_windows_raise only for cooperative local events and testing, not as a substitute for posix_kill.
 
-Supported usage is a single active PHP CLI request per process. Concurrent requests in ZTS servers, unusual extension combinations, process groups, Linux namespaces and exact POSIX fork semantics remain outside the verified scope. Review [docs/SIGNALS.md](docs/SIGNALS.md) and [docs/NATIVE-SCOPE.md](docs/NATIVE-SCOPE.md) before use.
+Supported usage is a single active PHP CLI request per process. Overlapping PHP requests in a ZTS host are explicitly rejected to protect shared signal state. Unusual extension combinations, arbitrary Unix process groups, Linux namespaces and exact POSIX fork semantics remain outside the Windows DLL's verified scope. Review [docs/SIGNALS.md](docs/SIGNALS.md) and [docs/NATIVE-SCOPE.md](docs/NATIVE-SCOPE.md) before use.
 
 **Status: experimental.** Do not publish the extension as production-ready or claim full Unix PCNTL compatibility.
