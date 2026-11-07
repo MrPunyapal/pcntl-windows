@@ -34,6 +34,7 @@ ZEND_BEGIN_MODULE_GLOBALS(pcntl)
     pcntl_win_child *children;
     HANDLE child_ready_event;
     bool child_wait_notifications_complete;
+    bool owns_active_request;
     int last_error;
     zval signal_handlers[32];
     DWORD signal_mask;
@@ -43,6 +44,9 @@ ZEND_BEGIN_MODULE_GLOBALS(pcntl)
 ZEND_END_MODULE_GLOBALS(pcntl)
 ZEND_DECLARE_MODULE_GLOBALS(pcntl)
 #define PCNTL_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(pcntl, v)
+/* The signal queue and VM interrupt target are process-wide. Refuse concurrent
+ * PHP requests instead of delivering an event into another thread's VM. */
+static volatile LONG pcntl_active_request = 0;
 
 static void pcntl_globals_init(zend_pcntl_globals *g)
 {
@@ -637,6 +641,13 @@ PHP_RINIT_FUNCTION(pcntl)
 #if defined(ZTS) && defined(COMPILE_DL_PCNTL)
     ZEND_TSRMLS_CACHE_UPDATE();
 #endif
+    PCNTL_G(owns_active_request) = false;
+    if (InterlockedCompareExchange(&pcntl_active_request, 1, 0) != 0) {
+        php_error_docref(NULL, E_WARNING,
+            "pcntl-windows supports only one active PHP request per process");
+        return FAILURE;
+    }
+    PCNTL_G(owns_active_request) = true;
     PCNTL_G(children) = NULL;
     PCNTL_G(child_ready_event) = CreateEventW(NULL, FALSE, FALSE, NULL);
     PCNTL_G(child_wait_notifications_complete) = true;
@@ -646,7 +657,9 @@ PHP_RINIT_FUNCTION(pcntl)
 }
 PHP_RSHUTDOWN_FUNCTION(pcntl)
 {
-    pcntl_win_child *child = PCNTL_G(children), *next;
+    pcntl_win_child *child, *next;
+    if (!PCNTL_G(owns_active_request)) return SUCCESS;
+    child = PCNTL_G(children);
     while (child) {
         next = child->next;
         pcntl_win_release_child(child); /* Detach; do not kill running children. */
@@ -659,6 +672,8 @@ PHP_RSHUTDOWN_FUNCTION(pcntl)
         PCNTL_G(child_ready_event) = NULL;
     }
     pcntl_win_signal_request_shutdown();
+    PCNTL_G(owns_active_request) = false;
+    InterlockedExchange(&pcntl_active_request, 0);
     return SUCCESS;
 }
 PHP_MINFO_FUNCTION(pcntl)

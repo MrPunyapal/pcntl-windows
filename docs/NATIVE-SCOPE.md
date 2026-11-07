@@ -17,7 +17,7 @@ The Windows extension provides 28 upstream PCNTL function names and two helper A
 - Signal masks and synchronous waits cover only extension-managed queued events. They do not install POSIX kernel signal masks or provide arbitrary cross-process POSIX signaling.
 - The current affinity APIs expose one processor group rather than complete CPU Sets on machines with many logical processors.
 - Windows scheduler classes are not numerically equivalent to POSIX nice values or macOS QoS policies.
-- The extension targets one active PHP CLI request per process. Concurrent host-driven ZTS request isolation is not verified.
+- The extension enforces at most one active PHP request per process with an atomic request guard. A concurrent request fails module request initialization with a warning rather than risking cross-thread delivery through the shared signal queue or VM interrupt target. This is not support for concurrent ZTS PHP requests.
 
 ## Missing kernel operations
 
