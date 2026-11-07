@@ -44,6 +44,7 @@ cd "$source"
     --disable-cgi \
     --disable-phpdbg \
     --enable-pcntl \
+    --disable-fiber-asm \
     --without-pear
 
 make -j2
