@@ -11,15 +11,12 @@ workspace="$(cygpath -u "$GITHUB_WORKSPACE")"
 source="$workspace/upstream/php-src"
 cd "$source"
 
-export PATH="/usr/bin:/bin:$PATH"
-# The Chocolatey re2c executable is standalone and works as a lexer tool
-# from Cygwin. Keep the verified source-build path as a fallback.
-if [ -x /cygdrive/c/ProgramData/chocolatey/bin/re2c.exe ]; then
-    export PATH="/cygdrive/c/ProgramData/chocolatey/bin:$PATH"
-fi
+# Cygwin's configure and Makefile pass POSIX /cygdrive/... paths to re2c.
+# Never put the native Windows Chocolatey re2c.exe on PATH: it cannot read
+# those paths and fails while generating ext/json/json_scanner.c.
+export PATH="/usr/local/bin:/usr/bin:/bin"
 export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
-# Cygwin's package index does not currently include re2c. Build a pinned
-# upstream release instead of bypassing PHP's configure requirements.
+# Build a Cygwin-linked re2c from the pinned source release if absent.
 if ! command -v re2c >/dev/null 2>&1; then
     tempdir="$(mktemp -d)"
     trap 'rm -rf "$tempdir"' EXIT
@@ -35,6 +32,13 @@ if ! command -v re2c >/dev/null 2>&1; then
     )
     re2c --version
 fi
+re2c_path="$(command -v re2c)"
+case "$re2c_path" in
+    /usr/local/bin/*|/usr/bin/*) ;;
+    *) echo "Refusing to use non-Cygwin re2c: $re2c_path" >&2; exit 1 ;;
+esac
+printf 're2c executable: %s\n' "$re2c_path"
+re2c --version
 
 cd "$source"
 ./buildconf --force
