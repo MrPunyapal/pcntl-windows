@@ -25,12 +25,15 @@ typedef struct pcntl_win_child {
     DWORD group_id; /* 0 = inherited/default; PID = new Windows console group */
     HANDLE handle;
     HANDLE wait_registration;
+    HANDLE ready_event; /* Request-owned event, valid until callback unregister. */
     volatile LONG sigchld_sent;
     struct pcntl_win_child *next;
 } pcntl_win_child;
 
 ZEND_BEGIN_MODULE_GLOBALS(pcntl)
     pcntl_win_child *children;
+    HANDLE child_ready_event;
+    bool child_wait_notifications_complete;
     int last_error;
     zval signal_handlers[32];
     DWORD signal_mask;
@@ -50,6 +53,7 @@ static void pcntl_globals_init(zend_pcntl_globals *g)
 /* Threadpool callbacks may run on a Windows worker thread. Only queue events;
  * never access PHP zvals or call PHP userland from these callbacks. */
 static void pcntl_win_enqueue(int signum);
+static int pcntl_win32_errno(DWORD code);
 
 static void pcntl_win_emit_sigchld(pcntl_win_child *child)
 {
@@ -60,9 +64,27 @@ static void pcntl_win_emit_sigchld(pcntl_win_child *child)
 
 static VOID CALLBACK pcntl_win_child_exited(PVOID context, BOOLEAN timed_out)
 {
+    pcntl_win_child *child = (pcntl_win_child *) context;
     if (!timed_out) {
-        pcntl_win_emit_sigchld((pcntl_win_child *) context);
+        /* Wake any-child and waitid waiters without polling all process handles.
+         * The PHP request owns this event until every callback is unregistered. */
+        if (child->ready_event != NULL) SetEvent(child->ready_event);
+        pcntl_win_emit_sigchld(child);
     }
+}
+
+static bool pcntl_win_wait_for_child_event(void)
+{
+    DWORD result;
+    if (!PCNTL_G(child_ready_event) || !PCNTL_G(child_wait_notifications_complete)) {
+        /* A wait registration failed, so some children have no event source. */
+        Sleep(10);
+        return true;
+    }
+    result = WaitForSingleObject(PCNTL_G(child_ready_event), INFINITE);
+    if (result == WAIT_OBJECT_0) return true;
+    PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+    return false;
 }
 
 static void pcntl_win_release_child(pcntl_win_child *child)
@@ -310,13 +332,15 @@ PHP_FUNCTION(pcntl_windows_spawn)
             child->group_id = new_process_group ? process.dwProcessId : 0;
             child->handle = process.hProcess;
             child->wait_registration = NULL;
+            child->ready_event = PCNTL_G(child_ready_event);
             child->sigchld_sent = 0;
-            /* A failure to register the notification does not lose the child:
-             * a successful wait still synthesizes one SIGCHLD event. */
-            RegisterWaitForSingleObject(
-                &child->wait_registration, child->handle,
-                pcntl_win_child_exited, child, INFINITE, WT_EXECUTEONLYONCE
-            );
+            /* If a wait registration fails, preserve the child but fall back
+             * to polling so a blocking wait cannot hang on an unsignaled event. */
+            if (!RegisterWaitForSingleObject(
+                    &child->wait_registration, child->handle,
+                    pcntl_win_child_exited, child, INFINITE, WT_EXECUTEONLYONCE)) {
+                PCNTL_G(child_wait_notifications_complete) = false;
+            }
             child->next = PCNTL_G(children);
             PCNTL_G(children) = child;
             PCNTL_G(last_error) = 0;
@@ -359,7 +383,7 @@ static void pcntl_win_rusage(HANDLE handle, zval *usage)
     }
 }
 
-/* Wait on one child or poll registered process handles for any-child waits.
+/* Wait on one child or use threadpool exit notifications for any-child waits.
  * Unlike WaitForMultipleObjects, this is not restricted to 64 handles. */
 static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, zval *usage)
 {
@@ -415,7 +439,7 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
                 return -1;
             }
             if (flags & PCNTL_WINDOWS_WNOHANG) return 0;
-            Sleep(10); /* Bounded-latency poll; replace with threadpool waits later. */
+            if (!pcntl_win_wait_for_child_event()) return -1;
         }
     }
     if (!GetExitCodeProcess(selected->handle, &exit_code)) {
@@ -614,6 +638,8 @@ PHP_RINIT_FUNCTION(pcntl)
     ZEND_TSRMLS_CACHE_UPDATE();
 #endif
     PCNTL_G(children) = NULL;
+    PCNTL_G(child_ready_event) = CreateEventW(NULL, FALSE, FALSE, NULL);
+    PCNTL_G(child_wait_notifications_complete) = true;
     PCNTL_G(last_error) = 0;
     pcntl_win_signal_request_init();
     return SUCCESS;
@@ -627,6 +653,11 @@ PHP_RSHUTDOWN_FUNCTION(pcntl)
         child = next;
     }
     PCNTL_G(children) = NULL;
+    /* All child callbacks have completed before closing their shared event. */
+    if (PCNTL_G(child_ready_event)) {
+        CloseHandle(PCNTL_G(child_ready_event));
+        PCNTL_G(child_ready_event) = NULL;
+    }
     pcntl_win_signal_request_shutdown();
     return SUCCESS;
 }

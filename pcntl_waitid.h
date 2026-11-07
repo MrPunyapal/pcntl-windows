@@ -56,7 +56,7 @@ PHP_FUNCTION(pcntl_waitid)
             RETURN_FALSE;
         }
         if (selected || (flags & PCNTL_WINDOWS_WNOHANG)) break;
-        Sleep(10);
+        if (!pcntl_win_wait_for_child_event()) RETURN_FALSE;
     }
     if (!selected) {
         if (info) {

@@ -100,6 +100,9 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     child->group_id = 0;
     child->handle = info.ProcessHandle;
     child->wait_registration = NULL;
+    child->ready_event = PCNTL_G(child_ready_event);
+    /* The experimental NT clone is not registered with a threadpool wait. */
+    PCNTL_G(child_wait_notifications_complete) = false;
     child->sigchld_sent = 0;
     child->next = PCNTL_G(children);
     PCNTL_G(children) = child;

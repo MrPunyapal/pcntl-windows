@@ -4,7 +4,7 @@ The Windows extension provides 28 upstream PCNTL function names and two helper A
 
 ## Confirmed native building blocks
 
-- Process spawning: CreateProcessW; process waiting: Win32 handles and WaitForSingleObject.
+- Process spawning: CreateProcessW; process waiting: Win32 handles, WaitForSingleObject and threadpool child-exit notifications for scalable any-child waiting.
 - Process accounting: GetProcessTimes and GetProcessMemoryInfo.
 - Scheduling: Windows priority classes, process-affinity masks and processor numbers.
 - Signal subsystem: a cooperative queue fed by console control handlers, in-process injection, and Windows timers; Zend VM interrupt dispatch runs PHP callbacks on PHP's execution thread.
