@@ -1,13 +1,8 @@
 name: UNSAFE native PHP NT clone experiment
+# Intentionally manual-only. The known PHP VM cloning experiment hangs in
+# the child despite reaching the native clone return point. This is not a CI
+# gate for the supported Windows extension.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/php-nt-clone-research.yml'
-      - 'pcntl_clone_experiment.h'
-      - 'config.w32'
-      - 'tests/026-unsafe-nt-clone.phpt'
-      - 'pcntl.c'
   workflow_dispatch:
 permissions:
   contents: read
