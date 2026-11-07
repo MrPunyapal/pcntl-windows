@@ -56,3 +56,4 @@ test -x "$php_binary"
 "$php_binary" -n tools/posix-capabilities.php
 "$php_binary" -n -r 'if (!extension_loaded("pcntl") || !function_exists("pcntl_fork")) exit(1);'
 "$php_binary" -n tests/reference/fork-exec.php
+"$php_binary" -n tests/reference/fork-matrix.php

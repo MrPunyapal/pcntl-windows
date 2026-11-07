@@ -28,6 +28,8 @@ jobs:
           php -r 'if (!extension_loaded("pcntl")) exit(1);'
       - name: Validate real POSIX fork and exec
         run: php tests/reference/fork-exec.php
+      - name: Validate nested fork and copied PHP resources
+        run: php tests/reference/fork-matrix.php
       - name: Inspect Linux namespace support
         run: php tests/reference/linux-namespace-probe.php
       - name: Validate real unshare and setns with privilege when available
