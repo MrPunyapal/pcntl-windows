@@ -33,6 +33,6 @@ The launcher converts script paths with `cygpath.exe`, checks that PCNTL fork is
 
 ## Reproducing the build
 
-PHP is configured with `--enable-pcntl --disable-fiber-asm` under Cygwin. A Cygwin-native `re2c` must generate the lexer because the Windows-native generator cannot read paths prefixed with `/cygdrive/`. The workflow uploads `php.exe` **only if** the fork/exec and nested fork/resource tests pass.
+PHP is configured with `--enable-pcntl --disable-fiber-asm` under Cygwin. A Cygwin-native `re2c` must generate the lexer because the Windows-native generator cannot read paths prefixed with `/cygdrive/`. CI caches its Cygwin-native re2c build. Source downloads come from Debian's upstream mirror, with GitHub and Raspbian fallbacks, and must match the pinned SHA256 before the downloaded build scripts execute. An external mirror outage therefore does not silently permit unverified toolchain input. The workflow uploads `php.exe` and a `php.exe.sha256` checksum **only if** the fork/exec, nested fork/resource tests and a Windows PowerShell launcher smoke test pass. This describes newer CI artifacts; the older linked successful artifact above contains only `php.exe`.
 
 Read [Cygwin's documented fork limitations](https://cygwin.com/cygwin-ug-net/highlights.html) before relying on this build. The separate native Windows DLL still exports **28/34** PCNTL names with documented Win32 limitations.

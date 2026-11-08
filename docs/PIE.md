@@ -2,7 +2,7 @@
 
 [PIE](https://github.com/php/pie) can install prebuilt native Windows PHP extensions, so users do not need a C compiler. This repository uses [php/php-windows-builder](https://github.com/php/php-windows-builder) to build and package DLLs.
 
-**Availability:** The PIE manifest and release workflow are prepared, but a published GitHub release with matching binary assets **and** Packagist registration are required before a normal `pie install` command will work. Do not advertise the command as ready until an end-to-end installation has passed.
+**Availability:** The PIE manifest and release workflow are prepared. Composer metadata is validated on relevant pushes to `main`, without publishing a release. However, a published GitHub release with matching binary assets **and** Packagist registration are required before a normal `pie install` command will work. Do not advertise the command as ready until an end-to-end installation has passed.
 
 ## Supported targets
 

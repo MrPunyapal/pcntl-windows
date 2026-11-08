@@ -8,6 +8,6 @@ Known differences: SIGUSR1, SIGUSR2 and SIGHUP have no native OS delivery source
 
 Do not treat pcntl_windows_raise as posix_kill. The VM interrupt bridge targets one active CLI request per process. Overlapping requests in a ZTS host are **rejected during PHP module request initialization** because the signal queue and VM interrupt target are process-wide. Real POSIX signal delivery and POSIX syscall interruption/restart semantics remain unavailable.
 
-Synchronous signal waits consume extension-managed pending events only. Timeout handling uses Windows millisecond scheduling and may exceed a requested nanosecond interval. These calls do not receive arbitrary process-directed POSIX kernel signals.
+Synchronous signal waits use a Windows kernel event rather than a 1 ms polling loop. An unrelated queued signal cannot consume a signal requested by sigwaitinfo/sigtimedwait; the appropriate signal remains pending until explicitly consumed or dispatched. Synchronous signal waits consume extension-managed pending events only. Timeout handling uses Windows millisecond scheduling and may exceed a requested nanosecond interval. These calls do not receive arbitrary process-directed POSIX kernel signals.
 
 Windows child exit notifications are registered per child handle. They queue SIGCHLD without executing PHP code outside the main thread. Notifications are unregistered before the child record is released. A normal wait can enqueue the notification if a callback has not yet run.
