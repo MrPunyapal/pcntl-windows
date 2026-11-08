@@ -412,7 +412,10 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
             return -1;
         }
         result = WaitForSingleObject(node->handle, (flags & PCNTL_WINDOWS_WNOHANG) ? 0 : INFINITE);
-        if (result == WAIT_TIMEOUT) return 0;
+        if (result == WAIT_TIMEOUT) {
+            PCNTL_G(last_error) = 0;
+            return 0;
+        }
         if (result != WAIT_OBJECT_0) {
             PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
             return -1;
@@ -442,7 +445,10 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
                 PCNTL_G(last_error) = ECHILD;
                 return -1;
             }
-            if (flags & PCNTL_WINDOWS_WNOHANG) return 0;
+            if (flags & PCNTL_WINDOWS_WNOHANG) {
+                PCNTL_G(last_error) = 0;
+                return 0;
+            }
             if (!pcntl_win_wait_for_child_event()) return -1;
         }
     }
