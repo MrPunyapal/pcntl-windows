@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'tools/Invoke-WslPhp.ps1'
+      - 'tools/Test-WslPhp.ps1'
       - '.github/workflows/wsl-wrapper.yml'
   workflow_dispatch:
 permissions:
@@ -24,3 +25,6 @@ jobs:
             exit 1
           }
           Write-Output 'PowerShell syntax validated'
+      - name: Mock WSL path translation, namespace probe and argument forwarding
+        shell: pwsh
+        run: ./tools/Test-WslPhp.ps1
