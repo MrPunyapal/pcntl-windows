@@ -9,6 +9,7 @@ on:
       - '.gitattributes'
       - 'tests/reference/fork-exec.php'
       - 'tests/reference/fork-matrix.php'
+      - 'tests/reference/fork-socket-pair.php'
       - 'tests/reference/fixtures/exec-child.php'
   workflow_dispatch:
 permissions:
@@ -61,6 +62,8 @@ jobs:
           & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-exec.php -PhpBinary $binary
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-matrix.php -PhpBinary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-socket-pair.php -PhpBinary $binary
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Write checksum of verified Cygwin PHP binary
         shell: pwsh
