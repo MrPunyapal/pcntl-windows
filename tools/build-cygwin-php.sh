@@ -20,10 +20,31 @@ export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
 if ! command -v re2c >/dev/null 2>&1; then
     tempdir="$(mktemp -d)"
     trap 'rm -rf "$tempdir"' EXIT
-    curl -fL --retry 3 --silent --show-error \
-        https://github.com/skvadrik/re2c/releases/download/4.6/re2c-4.6.tar.xz \
-        -o "$tempdir/re2c.tar.xz"
-    tar -xJf "$tempdir/re2c.tar.xz" -C "$tempdir"
+    # GitHub release downloads occasionally return HTTP 504. Debian mirrors
+    # the byte-identical upstream 4.6 tarball (Debian re2c_4.6.orig.tar.xz).
+    # Check the upstream SHA256 before running any downloaded build scripts.
+    re2c_sha256="75bf2696445e831d0d44e0d9f2909eeffc18c09757f222b2fb025f7e59fe130b"
+    re2c_archive="$tempdir/re2c.tar.xz"
+    re2c_source=""
+    for url in \
+        "https://deb.debian.org/debian/pool/main/r/re2c/re2c_4.6.orig.tar.xz" \
+        "https://github.com/skvadrik/re2c/releases/download/4.6/re2c-4.6.tar.xz" \
+        "https://archive.raspbian.org/raspbian/pool/main/r/re2c/re2c_4.6.orig.tar.xz"; do
+        if curl --fail --location --retry 3 --retry-delay 2 \
+                --connect-timeout 20 --silent --show-error \
+                "$url" -o "$re2c_archive" \
+            && printf '%s  %s\n' "$re2c_sha256" "$re2c_archive" | sha256sum --check --status; then
+            re2c_source="$url"
+            break
+        fi
+        echo "re2c download failed or did not match pinned SHA256: $url" >&2
+    done
+    if [[ -z "$re2c_source" ]]; then
+        echo "Unable to fetch verified re2c 4.6 source from any mirror" >&2
+        exit 1
+    fi
+    echo "Verified re2c source: $re2c_source"
+    tar -xJf "$re2c_archive" -C "$tempdir"
     (
         cd "$tempdir/re2c-4.6"
         ./configure --disable-docs --prefix=/usr/local

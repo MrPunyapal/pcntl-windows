@@ -44,6 +44,11 @@ jobs:
           if (-not (Test-Path 'C:\cygwin64\bin\bash.exe')) {
             throw 'Cygwin installer did not create the bash binary. Check package installation and setup.log.'
           }
+      - name: Cache Cygwin-native re2c 4.6 generator
+        uses: actions/cache@v4
+        with:
+          path: C:\cygwin64\usr\local\bin\re2c.exe
+          key: cygwin-re2c-4.6-${{ runner.os }}-v1
       - name: Build Cygwin-linked PHP and run real PCNTL fork/exec tests
         shell: pwsh
         run: |
