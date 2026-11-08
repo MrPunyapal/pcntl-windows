@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/cygwin-reference.yml'
       - 'tools/build-cygwin-php.sh'
+      - 'tools/Invoke-CygwinPhp.ps1'
       - '.gitattributes'
       - 'tests/reference/fork-exec.php'
       - 'tests/reference/fork-matrix.php'
@@ -48,10 +49,26 @@ jobs:
         run: |
           & 'C:\cygwin64\bin\bash.exe' -l -c 'bash "$(cygpath -u "$GITHUB_WORKSPACE")/tools/build-cygwin-php.sh"'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate Windows PowerShell launcher against real Cygwin PHP
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:GITHUB_WORKSPACE 'upstream\php-src\sapi\cli\php.exe'
+          & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-exec.php -PhpBinary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-matrix.php -PhpBinary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Write checksum of verified Cygwin PHP binary
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:GITHUB_WORKSPACE 'upstream\php-src\sapi\cli\php.exe'
+          $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  php.exe" | Set-Content -LiteralPath "$binary.sha256" -Encoding ascii
       - name: Publish verified Cygwin PHP CLI
         uses: actions/upload-artifact@v4
         with:
           name: cygwin-php85-pcntl-x64
-          path: upstream/php-src/sapi/cli/php.exe
+          path: |
+            upstream/php-src/sapi/cli/php.exe
+            upstream/php-src/sapi/cli/php.exe.sha256
           if-no-files-found: error
           retention-days: 14
