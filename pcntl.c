@@ -602,6 +602,11 @@ PHP_MINIT_FUNCTION(pcntl)
 {
     ZEND_INIT_MODULE_GLOBALS(pcntl, pcntl_globals_init, NULL);
     if (pcntl_register_qos() != SUCCESS) return FAILURE;
+    pcntl_signal_ready_event = CreateEventW(NULL, FALSE, FALSE, NULL);
+    if (!pcntl_signal_ready_event) {
+        php_error_docref(NULL, E_WARNING, "unable to create cooperative signal notification event");
+        return FAILURE;
+    }
     REGISTER_LONG_CONSTANT("PRIO_PROCESS", PCNTL_PRIO_PROCESS, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PRIO_PGRP", PCNTL_PRIO_PGRP, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("PRIO_USER", PCNTL_PRIO_USER, CONST_CS | CONST_PERSISTENT);
@@ -640,6 +645,10 @@ PHP_MSHUTDOWN_FUNCTION(pcntl)
 {
     if (zend_interrupt_function == pcntl_win_interrupt_handler) zend_interrupt_function = pcntl_previous_interrupt;
     if (pcntl_console_installed) SetConsoleCtrlHandler(pcntl_win_console_handler, FALSE);
+    if (pcntl_signal_ready_event) {
+        CloseHandle(pcntl_signal_ready_event);
+        pcntl_signal_ready_event = NULL;
+    }
     return SUCCESS;
 }
 PHP_RINIT_FUNCTION(pcntl)

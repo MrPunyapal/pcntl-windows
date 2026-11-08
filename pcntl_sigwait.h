@@ -54,11 +54,34 @@ static zend_long pcntl_win_wait_signal(DWORD mask, bool timeout, ULONGLONG durat
             PCNTL_G(last_error) = 0;
             return signum;
         }
-        if (timeout && (GetTickCount64() - begin >= duration_ms)) {
-            PCNTL_G(last_error) = EAGAIN;
-            return -1;
+        {
+            DWORD wait_ms = INFINITE, result;
+            if (timeout) {
+                ULONGLONG elapsed = GetTickCount64() - begin;
+                ULONGLONG remaining;
+                if (elapsed >= duration_ms) {
+                    PCNTL_G(last_error) = EAGAIN;
+                    return -1;
+                }
+                remaining = duration_ms - elapsed;
+                /* INFINITE (0xffffffff) cannot be used as a finite timeout. */
+                wait_ms = remaining >= INFINITE ? INFINITE - 1 : (DWORD) remaining;
+            }
+            if (!pcntl_signal_ready_event) {
+                PCNTL_G(last_error) = EIO;
+                return -1;
+            }
+            result = WaitForSingleObject(pcntl_signal_ready_event, wait_ms);
+            if (result == WAIT_TIMEOUT) {
+                /* Recompute elapsed time on the next pass, including when a
+                 * very long finite wait was split to avoid INFINITE. */
+                continue;
+            }
+            if (result != WAIT_OBJECT_0) {
+                PCNTL_G(last_error) = pcntl_win32_errno(GetLastError());
+                return -1;
+            }
         }
-        Sleep(1);
     }
 }
 

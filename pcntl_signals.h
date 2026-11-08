@@ -13,6 +13,8 @@
 #define PCNTL_SIG_SETMASK 2
 
 static volatile LONG pcntl_pending[32];
+/* Process lifetime event, shared by the single permitted active PHP request. */
+static HANDLE pcntl_signal_ready_event = NULL;
 static volatile LONG pcntl_console_enabled = 0;
 static bool pcntl_console_installed = false;
 static volatile LONG pcntl_async_enabled = 0;
@@ -23,6 +25,7 @@ static void (*pcntl_previous_interrupt)(zend_execute_data *) = NULL;
 static void pcntl_win_enqueue(int signum)
 {
     InterlockedIncrement(&pcntl_pending[signum]);
+    if (pcntl_signal_ready_event) SetEvent(pcntl_signal_ready_event);
     if (InterlockedCompareExchange(&pcntl_async_enabled, 0, 0)) {
         AcquireSRWLockShared(&pcntl_vm_lock);
         if (pcntl_vm_target) zend_atomic_bool_store_ex(pcntl_vm_target, true);
@@ -67,6 +70,7 @@ static void pcntl_win_signal_request_init(void)
         ZVAL_UNDEF(&PCNTL_G(signal_handlers)[i]);
         InterlockedExchange(&pcntl_pending[i], 0);
     }
+    if (pcntl_signal_ready_event) ResetEvent(pcntl_signal_ready_event);
     PCNTL_G(signal_mask) = 0;
     PCNTL_G(async_signals) = false;
     AcquireSRWLockExclusive(&pcntl_vm_lock);
