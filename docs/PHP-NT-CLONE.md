@@ -54,6 +54,16 @@ to PHP. A positive result would isolate module unmapping as a trigger; pinning
 a DLL is not a general solution for inherited loader/runtime state. Default
 research behavior remains unpinned. Neither mode is included in release builds.
 
+[Pinned follow-up 42877946620](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42877946620)
+reached every checkpoint and avoided the hang, but exited with native status
+`3221225477` (`0xC0000005`, access violation), not 73. The test correctly failed.
+Thus pinning is insufficient. WER local crash capture did not produce a dump
+for this cloned process. The optional `debug_child=true` experiment instead
+creates the child suspended, attaches the Windows debug API, resumes it, and
+pumps events for at most 15 seconds, preserving a dump on second-chance
+exceptions. This instrumentation changes process/debugger state and cannot
+establish uninstrumented safety. Do not enable either option outside research.
+
 The diagnostic artifact contains PHPT output/diffs/logs and
 `pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
 than treating an expired artifact link as permanent evidence. Checkpoints 0–4

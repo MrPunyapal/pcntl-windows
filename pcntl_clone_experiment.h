@@ -50,6 +50,34 @@ static void pcntl_clone_dump(HANDLE process, DWORD pid)
     if (library) FreeLibrary(library);
 }
 
+static void pcntl_clone_debug(HANDLE process, DWORD pid)
+{
+    DEBUG_EVENT event;
+    ULONGLONG deadline = GetTickCount64() + 15000;
+    while (GetTickCount64() < deadline) {
+        DWORD disposition = DBG_CONTINUE;
+        if (!WaitForDebugEvent(&event, 100)) continue;
+        if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
+            DWORD code = event.u.Exception.ExceptionRecord.ExceptionCode;
+            if (code != EXCEPTION_BREAKPOINT) disposition = DBG_EXCEPTION_NOT_HANDLED;
+            if (!event.u.Exception.dwFirstChance) {
+                php_printf("nt-clone-exception=0x%08lx address=%p\n",
+                    (unsigned long) code, event.u.Exception.ExceptionRecord.ExceptionAddress);
+                pcntl_clone_dump(process, pid);
+            }
+        } else if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT) {
+            if (event.u.LoadDll.hFile) CloseHandle(event.u.LoadDll.hFile);
+        } else if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
+            if (event.u.CreateProcessInfo.hFile) CloseHandle(event.u.CreateProcessInfo.hFile);
+        }
+        ContinueDebugEvent(event.dwProcessId, event.dwThreadId, disposition);
+        if (event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT) return;
+    }
+    php_printf("nt-clone-debug-timeout=1\n");
+    pcntl_clone_dump(process, pid);
+    DebugActiveProcessStop(pid);
+}
+
 typedef LONG pcntl_ntstatus;
 typedef struct {
     ULONG Length;
@@ -85,6 +113,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     DWORD probe_result;
     int stage;
     bool pin_module;
+    bool debug_child;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
@@ -95,6 +124,8 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         RETURN_THROWS();
     }
     pin_module = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_PIN_MODULE", enabled, sizeof(enabled)) == 1
+        && enabled[0] == '1';
+    debug_child = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_DEBUG", enabled, sizeof(enabled)) == 1
         && enabled[0] == '1';
     nt = GetModuleHandleW(L"ntdll.dll");
     if (!nt) {
@@ -126,7 +157,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     }
     memset(&info, 0, sizeof(info));
     info.Length = sizeof(info);
-    result = clone(PCNTL_NT_CLONE_INHERIT_HANDLES, NULL, NULL, NULL, &info);
+    result = clone(PCNTL_NT_CLONE_INHERIT_HANDLES | (debug_child ? 1 : 0), NULL, NULL, NULL, &info);
 
     if (result == PCNTL_NT_CLONED_CHILD) {
         /* Pure Win32 event sets a cross-process marker before PHP VM resumes. */
@@ -154,6 +185,15 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         CloseHandle(probe);
         PCNTL_G(last_error) = EIO;
         RETURN_LONG(-1);
+    }
+    if (debug_child) {
+        pid = GetProcessId(info.ProcessHandle);
+        if (!info.ThreadHandle || !DebugActiveProcess(pid)) {
+            TerminateProcess(info.ProcessHandle, 99);
+        } else {
+            ResumeThread(info.ThreadHandle);
+            pcntl_clone_debug(info.ProcessHandle, pid);
+        }
     }
     probe_result = WaitForSingleObject(probe, 2500);
     CloseHandle(probe);

@@ -9,6 +9,10 @@ on:
         description: 'Isolated hypothesis: pin the cloned extension to avoid module unmapping'
         type: boolean
         default: false
+      debug_child:
+        description: 'Attach a debugger before resuming the cloned child and dump second-chance exceptions'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -18,6 +22,7 @@ jobs:
     env:
       PCNTL_UNSAFE_CLONE_TEST: '1'
       PCNTL_UNSAFE_CLONE_PIN_MODULE: ${{ inputs.pin_module && '1' || '0' }}
+      PCNTL_UNSAFE_CLONE_DEBUG: ${{ inputs.debug_child && '1' || '0' }}
     steps:
       - uses: actions/checkout@v5
       - name: Capture crash dumps for isolated PHP processes
