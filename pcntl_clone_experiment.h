@@ -42,7 +42,8 @@ static void pcntl_clone_dump(HANDLE process, DWORD pid)
         file = CreateFileW(L"pcntl-clone-child.dmp", GENERIC_WRITE, 0, NULL,
             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (file != INVALID_HANDLE_VALUE) {
-            ok = dump(process, pid, file, MiniDumpWithThreadInfo, NULL, NULL, NULL);
+            ok = dump(process, pid, file,
+                MiniDumpWithThreadInfo | MiniDumpWithFullMemoryInfo, NULL, NULL, NULL);
             CloseHandle(file);
         }
     }
@@ -70,6 +71,17 @@ static void pcntl_clone_debug(HANDLE process, DWORD pid, bool ignore_invalid_han
             if (!event.u.Exception.dwFirstChance) {
                 php_printf("nt-clone-exception=0x%08lx address=%p\n",
                     (unsigned long) code, event.u.Exception.ExceptionRecord.ExceptionAddress);
+                if (code == EXCEPTION_ACCESS_VIOLATION
+                    && event.u.Exception.ExceptionRecord.NumberParameters >= 2) {
+                    MEMORY_BASIC_INFORMATION parent_region = {0}, child_region = {0};
+                    LPCVOID fault = (LPCVOID) event.u.Exception.ExceptionRecord.ExceptionInformation[1];
+                    VirtualQuery(fault, &parent_region, sizeof(parent_region));
+                    VirtualQueryEx(process, fault, &child_region, sizeof(child_region));
+                    php_printf("nt-clone-fault=%p parent-state=0x%lx parent-type=0x%lx parent-protect=0x%lx child-state=0x%lx child-type=0x%lx child-protect=0x%lx\n",
+                        fault, (unsigned long) parent_region.State, (unsigned long) parent_region.Type,
+                        (unsigned long) parent_region.Protect, (unsigned long) child_region.State,
+                        (unsigned long) child_region.Type, (unsigned long) child_region.Protect);
+                }
                 pcntl_clone_dump(process, pid);
             }
         } else if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT) {

@@ -88,6 +88,18 @@ invalid-handle exceptions to capture a later access violation; this deliberately
 changes exception handling for diagnosis and cannot constitute a passing fork
 test. It defaults to false and is irrelevant without debugger attachment.
 
+[Later-crash run 42879837895](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42879837895)
+logged 19 invalid-handle exceptions, reached checkpoint 4, and captured a
+second-chance access violation in
+`ntdll!RtlpFcQueryFeatureConfigurationFromBuffers+0x2a`. The failing instruction
+was `mov r8d,dword ptr [rbp]`, with `rbp=0x000001c1fef80000`. Its callers included
+`RtlpFcQueryFeatureConfigurationFromBufferSet`, `RtlQueryFeatureConfiguration`,
+and `shell32+0x10eeb5`. This adds OS feature-configuration state as a concrete
+blocker beyond extension unloading and CRT descriptor ownership. A missing or
+inaccessible shared mapping is a hypothesis, not yet a proven cause. Dumps now
+include memory-region metadata, and exception diagnostics compare that address's
+parent/child mapping state without dumping the full PHP heap.
+
 The diagnostic artifact contains PHPT output/diffs/logs and
 `pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
 than treating an expired artifact link as permanent evidence. Checkpoints 0–4
