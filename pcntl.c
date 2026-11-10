@@ -39,6 +39,7 @@ ZEND_BEGIN_MODULE_GLOBALS(pcntl)
     zval signal_handlers[32];
     DWORD signal_mask;
     bool async_signals;
+    bool dispatching_signals;
     HANDLE alarm_timer;
     ULONGLONG alarm_deadline;
 ZEND_END_MODULE_GLOBALS(pcntl)

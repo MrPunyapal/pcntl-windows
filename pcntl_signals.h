@@ -73,6 +73,7 @@ static void pcntl_win_signal_request_init(void)
     if (pcntl_signal_ready_event) ResetEvent(pcntl_signal_ready_event);
     PCNTL_G(signal_mask) = 0;
     PCNTL_G(async_signals) = false;
+    PCNTL_G(dispatching_signals) = false;
     AcquireSRWLockExclusive(&pcntl_vm_lock);
     pcntl_vm_target = &EG(vm_interrupt);
     ReleaseSRWLockExclusive(&pcntl_vm_lock);
@@ -205,6 +206,8 @@ PHP_FUNCTION(pcntl_windows_raise)
 static void pcntl_win_dispatch_signals(void)
 {
     int signum;
+    if (PCNTL_G(dispatching_signals)) return;
+    PCNTL_G(dispatching_signals) = true;
     for (signum = 1; signum < 32; ++signum) {
         LONG i, count;
         zval *handler = &PCNTL_G(signal_handlers)[signum];
@@ -225,6 +228,7 @@ static void pcntl_win_dispatch_signals(void)
         zval_ptr_dtor(&fn);
         if (EG(exception)) break;
     }
+    PCNTL_G(dispatching_signals) = false;
 }
 
 static void pcntl_win_interrupt_handler(zend_execute_data *execute_data)
@@ -328,6 +332,17 @@ PHP_FUNCTION(pcntl_sigprocmask)
     if (mode == PCNTL_SIG_BLOCK) PCNTL_G(signal_mask) |= bits;
     else if (mode == PCNTL_SIG_UNBLOCK) PCNTL_G(signal_mask) &= ~bits;
     else PCNTL_G(signal_mask) = bits;
+    /* An earlier VM interrupt may have observed only blocked events. Request
+     * another interrupt when changing the mask makes queued work deliverable. */
+    if (PCNTL_G(async_signals)) {
+        for (i = 1; i < 32; ++i) {
+            if (!(PCNTL_G(signal_mask) & (((DWORD) 1) << i))
+                && InterlockedCompareExchange(&pcntl_pending[i], 0, 0) > 0) {
+                zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
+                break;
+            }
+        }
+    }
     if (old) {
         ZVAL_DEREF(old);
         zval_ptr_dtor(old);
