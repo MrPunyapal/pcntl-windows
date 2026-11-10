@@ -10,13 +10,13 @@ function check(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
 }
 
-function eventually(callable $condition, string $message): void {
+function eventually(callable $condition, string $message, ?callable $diagnostic = null): void {
     $deadline = microtime(true) + 15;
     do {
         if ($condition()) return;
         usleep(10_000);
     } while (microtime(true) < $deadline);
-    throw new RuntimeException($message);
+    throw new RuntimeException($message.($diagnostic ? ': '.json_encode($diagnostic(), JSON_THROW_ON_ERROR) : ''));
 }
 
 $children = [];
@@ -55,7 +55,10 @@ try {
     pcntl_async_signals(true);
     check(pcntl_sigprocmask(SIG_UNBLOCK, [SIGUSR1]), 'unblock async signal');
     check(posix_kill(getmypid(), SIGUSR1), 'send async signal');
-    eventually(function () use (&$received) { return count($received) === 2; }, 'async signal dispatch');
+    eventually(function () use (&$received) { return count($received) === 2; }, 'async signal dispatch',
+        function () use (&$received) {
+            return ['received' => $received, 'async' => pcntl_async_signals(), 'errno' => pcntl_errno()];
+        });
     $alarms = 0;
     check(pcntl_signal(SIGALRM, function () use (&$alarms) { $alarms++; }), 'alarm handler');
     pcntl_alarm(5);

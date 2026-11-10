@@ -92,3 +92,14 @@ jobs:
             upstream/php-src/sapi/cli/build-info.txt
           if-no-files-found: error
           retention-days: 14
+      - name: Preserve failed Cygwin conformance binary for diagnosis
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UNSUPPORTED-cygwin-conformance-diagnostics
+          path: |
+            upstream/php-src/sapi/cli/php.exe
+            upstream/php-src/config.log
+            upstream/php-src/config.nice
+          if-no-files-found: warn
+          retention-days: 7
