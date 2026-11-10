@@ -50,7 +50,7 @@ static void pcntl_clone_dump(HANDLE process, DWORD pid)
     if (library) FreeLibrary(library);
 }
 
-static void pcntl_clone_debug(HANDLE process, DWORD pid)
+static void pcntl_clone_debug(HANDLE process, DWORD pid, bool ignore_invalid_handles)
 {
     DEBUG_EVENT event;
     ULONGLONG deadline = GetTickCount64() + 15000;
@@ -60,6 +60,13 @@ static void pcntl_clone_debug(HANDLE process, DWORD pid)
         if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
             DWORD code = event.u.Exception.ExceptionRecord.ExceptionCode;
             if (code != EXCEPTION_BREAKPOINT) disposition = DBG_EXCEPTION_NOT_HANDLED;
+            if (ignore_invalid_handles && code == 0xc0000008
+                && event.u.Exception.dwFirstChance) {
+                /* Diagnostic only: emulate non-debugged CloseHandle failure
+                 * to observe the later uninstrumented access violation. */
+                php_printf("nt-clone-invalid-handle-observed=1\n");
+                disposition = DBG_CONTINUE;
+            }
             if (!event.u.Exception.dwFirstChance) {
                 php_printf("nt-clone-exception=0x%08lx address=%p\n",
                     (unsigned long) code, event.u.Exception.ExceptionRecord.ExceptionAddress);
@@ -114,6 +121,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     int stage;
     bool pin_module;
     bool debug_child;
+    bool ignore_invalid_handles;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
@@ -126,6 +134,8 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     pin_module = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_PIN_MODULE", enabled, sizeof(enabled)) == 1
         && enabled[0] == '1';
     debug_child = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_DEBUG", enabled, sizeof(enabled)) == 1
+        && enabled[0] == '1';
+    ignore_invalid_handles = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_IGNORE_INVALID_HANDLES", enabled, sizeof(enabled)) == 1
         && enabled[0] == '1';
     nt = GetModuleHandleW(L"ntdll.dll");
     if (!nt) {
@@ -192,7 +202,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
             TerminateProcess(info.ProcessHandle, 99);
         } else {
             ResumeThread(info.ThreadHandle);
-            pcntl_clone_debug(info.ProcessHandle, pid);
+            pcntl_clone_debug(info.ProcessHandle, pid, ignore_invalid_handles);
         }
     }
     probe_result = WaitForSingleObject(probe, 2500);

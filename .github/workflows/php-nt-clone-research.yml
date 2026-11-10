@@ -13,6 +13,10 @@ on:
         description: 'Attach a debugger before resuming the cloned child and dump second-chance exceptions'
         type: boolean
         default: false
+      ignore_invalid_handles:
+        description: 'Diagnostic only: continue first-chance invalid-handle exceptions to capture later crashes'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -23,6 +27,7 @@ jobs:
       PCNTL_UNSAFE_CLONE_TEST: '1'
       PCNTL_UNSAFE_CLONE_PIN_MODULE: ${{ inputs.pin_module && '1' || '0' }}
       PCNTL_UNSAFE_CLONE_DEBUG: ${{ inputs.debug_child && '1' || '0' }}
+      PCNTL_UNSAFE_CLONE_IGNORE_INVALID_HANDLES: ${{ inputs.ignore_invalid_handles && '1' || '0' }}
     steps:
       - uses: actions/checkout@v5
       - name: Capture crash dumps for isolated PHP processes

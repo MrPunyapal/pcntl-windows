@@ -79,6 +79,15 @@ is compared exactly with the PHPT expectation and preserved as `clone-inline.txt
 The ordinary file-based PHPT remains mandatory and failing. Future diagnostic
 artifacts also retain the exact research DLL/PDB and PHP binaries for unwinding.
 
+[Inline run 42879412428](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42879412428)
+also reached checkpoint 4 and exited with `0xC0000005`. Removing the PHP
+source-file descriptor did not resolve the crash. The source-file cleanup
+hypothesis is insufficient. The optional debugger-only
+`ignore_invalid_handles=true` switch logs and continues first-chance
+invalid-handle exceptions to capture a later access violation; this deliberately
+changes exception handling for diagnosis and cannot constitute a passing fork
+test. It defaults to false and is irrelevant without debugger attachment.
+
 The diagnostic artifact contains PHPT output/diffs/logs and
 `pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
 than treating an expired artifact link as permanent evidence. Checkpoints 0–4
