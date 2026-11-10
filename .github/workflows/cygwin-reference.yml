@@ -12,6 +12,7 @@ on:
       - 'tests/reference/fork-socket-pair.php'
       - 'tests/reference/fork-exec-environment.php'
       - 'tests/reference/fork-many-children.php'
+      - 'tests/reference/process-lifecycle.php'
       - 'tests/reference/fixtures/exec-environment-child.php'
       - 'tests/reference/fixtures/exec-child.php'
   workflow_dispatch:
@@ -31,7 +32,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           repository: php/php-src
-          ref: PHP-8.5
+          # PHP-8.5 snapshot; update deliberately after conformance validation.
+          ref: 6650a7ded6f93a60efa4abd6dc1e6d2e8419d34e
           path: upstream/php-src
       - name: Install POSIX build dependencies under Cygwin
         shell: pwsh
@@ -72,6 +74,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/fork-many-children.php -PhpBinary $binary
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./tools/Invoke-CygwinPhp.ps1 -Script ./tests/reference/process-lifecycle.php -PhpBinary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Write checksum of verified Cygwin PHP binary
         shell: pwsh
         run: |
@@ -85,5 +89,6 @@ jobs:
           path: |
             upstream/php-src/sapi/cli/php.exe
             upstream/php-src/sapi/cli/php.exe.sha256
+            upstream/php-src/sapi/cli/build-info.txt
           if-no-files-found: error
           retention-days: 14

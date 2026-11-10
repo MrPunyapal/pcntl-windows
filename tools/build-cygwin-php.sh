@@ -69,6 +69,7 @@ cd "$source"
     --disable-cgi \
     --disable-phpdbg \
     --enable-pcntl \
+    --enable-posix \
     --disable-fiber-asm \
     --without-pear
 
@@ -85,3 +86,20 @@ test -x "$php_binary"
 "$php_binary" -n tests/reference/fork-socket-pair.php
 "$php_binary" -n tests/reference/fork-exec-environment.php
 "$php_binary" -n tests/reference/fork-many-children.php
+"$php_binary" -n tests/reference/process-lifecycle.php
+
+# Keep exact source/toolchain and runtime dependency evidence beside the binary.
+# This is provenance, not a bundle of Cygwin DLLs or a standalone installation.
+{
+    printf 'PHP source commit: '
+    git -C "$source" rev-parse HEAD
+    printf 'Extension checkout commit: '
+    git -C "$workspace" rev-parse HEAD
+    "$php_binary" -n -v
+    gcc --version
+    re2c --version
+    printf '\nRuntime DLL dependencies:\n'
+    cygcheck "$php_binary"
+    printf '\nInstalled Cygwin packages:\n'
+    cygcheck -c
+} > "$source/sapi/cli/build-info.txt"

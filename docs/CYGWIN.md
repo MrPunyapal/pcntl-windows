@@ -40,4 +40,18 @@ Read [Cygwin's documented fork limitations](https://cygwin.com/cygwin-ug-net/hig
 
 ## Additional conformance gates
 
+`process-lifecycle.php` adds kernel signal masks, manual and async dispatch,
+`sigtimedwait` and unchanged output on timeout, alarm cancellation/delivery,
+`SIGCHLD`, real `setpgid`, negative-group `waitpid`, and double-reap `ECHILD`.
+It exercises `waitid(WNOWAIT)` only when exported and explicitly prints a skip
+otherwise. Child handshakes and waits are bounded; failures kill and reap tracked
+children. The Cygwin build now enables upstream POSIX as well as PCNTL for these
+checks. A passing Linux result alone does not establish Cygwin conformance.
+
+New builds pin the PHP source commit and include `build-info.txt` with PHP and
+extension commits, compiler/generator versions, resolved DLL dependencies and
+installed Cygwin packages. Cygwin packages still come from a rolling mirror;
+the manifest records that remaining reproducibility limit. The artifact remains
+dependent on a compatible Cygwin installation.
+
 The Cygwin and Linux reference workflows also run `fork-exec-environment.php` (PID, working directory, explicit environment, whitespace and empty arguments) and `fork-many-children.php` (12 children, `WNOHANG`, exit status and `ECHILD` after reaping). These were first run under Linux PHP 8.4; Cygwin results must be checked on the corresponding commit before claiming Cygwin conformance. All scripts run both directly in the Cygwin build and through the Windows PowerShell launcher.
