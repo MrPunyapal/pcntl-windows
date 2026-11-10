@@ -18,6 +18,48 @@ The unsafe clone workflow is **manual-only** while this failure is known. This p
 
 ## Next isolated experiments
 
+### November 11, 2026: shutdown hang localized
+
+[Instrumented run 42876382760](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42876382760)
+at `52059bef59c8c8ac9405433eafb6a5689d830b1f` reached all five checkpoints:
+return to PHP, PID check, copied array mutation, `exit(73)`, and a PHP shutdown
+callback. It then hung and was terminated/reaped by the parent. This corrects
+the earlier uncertainty about Zend VM continuation: this narrow PHP workload
+does resume successfully; ordinary process shutdown still fails.
+
+The preserved child minidump, inspected with Microsoft DbgEng and the matching
+Microsoft `ntdll.pdb`, shows the sole child thread waiting in:
+
+```text
+ntdll!NtWaitForAlertByThreadId+0x14
+ntdll!RtlAcquireSRWLockExclusive+0x13d
+ntdll!LdrProtectMrdata+0x18
+ntdll!RtlxRemoveInvertedFunctionTable+0x41
+ntdll!RtlRemoveInvertedFunctionTable+0x1d
+ntdll!LdrpUnmapModule+0x23
+ntdll!LdrpDereferenceModule+0xad
+ntdll!LdrUnloadDll+0x52
+KERNELBASE+0x2ffbe
+```
+
+The stack contains the `php_pcntl` module base as the unload target. The matching
+ntdll image is 10.0.20348.5756 (resource product version 10.0.20348.5773).
+This is evidence of a loader SRW-lock wait during extension unloading, not proof
+of which thread originally owned the lock. The small dump lacks arbitrary lock
+memory and complete PHP symbols. Do not reset undocumented loader locks.
+
+The manual workflow now accepts `pin_module=true` as one isolated follow-up:
+pin only the extension in the child using `GetModuleHandleExW` before returning
+to PHP. A positive result would isolate module unmapping as a trigger; pinning
+a DLL is not a general solution for inherited loader/runtime state. Default
+research behavior remains unpinned. Neither mode is included in release builds.
+
+The diagnostic artifact contains PHPT output/diffs/logs and
+`pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
+than treating an expired artifact link as permanent evidence. Checkpoints 0–4
+must all pass, followed by normal exit, status 73, parent heap isolation and
+successful reaping. A dump or successful checkpoint alone does not pass the test.
+
 1. Preserve the known-failing reproduction and record the exact PHP commit, native compiler, runner image, TS/NTS mode, extension list, process/thread IDs and timeout. Keep the test in the manual-only unsafe workflow.
 2. Add Win32 event or direct native file markers immediately before the NT clone, on child return, and immediately before and after returning control from the extension C handler to Zend. Do not invoke Zend allocation or logging from the native marker path until it is known safe.
 3. Capture a crash dump or timed process dump of the cloned child and compare its stacks, loader lock, CRT locks, TLS/FLS pointers, Zend executor state and inherited handle ownership with the parent. Distinguish deadlock from a child that exits without delivering a usable status.

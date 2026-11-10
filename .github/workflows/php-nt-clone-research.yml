@@ -4,6 +4,11 @@ name: UNSAFE native PHP NT clone experiment
 # gate for the supported Windows extension.
 on:
   workflow_dispatch:
+    inputs:
+      pin_module:
+        description: 'Isolated hypothesis: pin the cloned extension to avoid module unmapping'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -12,6 +17,7 @@ jobs:
     timeout-minutes: 18
     env:
       PCNTL_UNSAFE_CLONE_TEST: '1'
+      PCNTL_UNSAFE_CLONE_PIN_MODULE: ${{ inputs.pin_module && '1' || '0' }}
     steps:
       - uses: actions/checkout@v5
       - uses: php/php-windows-builder/extension@v1

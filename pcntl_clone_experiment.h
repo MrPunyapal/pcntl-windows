@@ -84,6 +84,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     HANDLE probe;
     DWORD probe_result;
     int stage;
+    bool pin_module;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
@@ -93,6 +94,8 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         zend_throw_error(NULL, "Experimental NT clone is disabled; set PCNTL_UNSAFE_CLONE_TEST=1 only in an isolated test process");
         RETURN_THROWS();
     }
+    pin_module = GetEnvironmentVariableA("PCNTL_UNSAFE_CLONE_PIN_MODULE", enabled, sizeof(enabled)) == 1
+        && enabled[0] == '1';
     nt = GetModuleHandleW(L"ntdll.dll");
     if (!nt) {
         PCNTL_G(last_error) = ENOSYS;
@@ -129,6 +132,17 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         /* Pure Win32 event sets a cross-process marker before PHP VM resumes. */
         SetEvent(probe);
         CloseHandle(probe);
+        if (pin_module) {
+            HMODULE pinned;
+            /* Isolated hypothesis: module unmapping triggers the observed
+             * inherited LdrProtectMrdata SRW lock wait. Never a release fix. */
+            if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                    | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                    (LPCWSTR) &pcntl_clone_checkpoints[0], &pinned)) {
+                PCNTL_G(last_error) = EIO;
+                RETURN_LONG(-1);
+            }
+        }
         /* Clone continues from this exact C call; the PHP VM may have unsafe
          * inherited locks and extension handles. The test must detect that. */
         PCNTL_G(last_error) = 0;
