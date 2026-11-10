@@ -564,6 +564,7 @@ PHP_FUNCTION(pcntl_strerror)
 static const zend_function_entry pcntl_functions[] = {
 #ifdef PHP_PCNTL_UNSAFE_CLONE
     PHP_FE(pcntl_windows_clone_experimental, arginfo_pcntl_windows_clone_experimental)
+    PHP_FE(pcntl_windows_clone_checkpoint_experimental, arginfo_pcntl_windows_clone_checkpoint_experimental)
 #endif
     PHP_FE(pcntl_windows_spawn, arginfo_pcntl_windows_spawn)
     PHP_FE(pcntl_windows_terminate, arginfo_pcntl_windows_terminate)

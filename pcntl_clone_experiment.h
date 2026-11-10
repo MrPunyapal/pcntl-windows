@@ -5,6 +5,51 @@
 #ifndef PHP_PCNTL_CLONE_EXPERIMENT_H
 #define PHP_PCNTL_CLONE_EXPERIMENT_H
 
+#include <dbghelp.h>
+
+/* Only the gated, single-request research binary uses these inherited events. */
+static HANDLE pcntl_clone_checkpoints[5];
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_pcntl_windows_clone_checkpoint_experimental, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, stage, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+PHP_FUNCTION(pcntl_windows_clone_checkpoint_experimental)
+{
+    zend_long stage;
+    BOOL ok;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(stage)
+    ZEND_PARSE_PARAMETERS_END();
+    if (stage < 0 || stage >= 5 || !pcntl_clone_checkpoints[stage]) RETURN_FALSE;
+    /* No Zend allocation, stdio, or CRT logging on this marker path. */
+    ok = SetEvent(pcntl_clone_checkpoints[stage]);
+    CloseHandle(pcntl_clone_checkpoints[stage]);
+    pcntl_clone_checkpoints[stage] = NULL;
+    RETURN_BOOL(ok);
+}
+
+static void pcntl_clone_dump(HANDLE process, DWORD pid)
+{
+    typedef BOOL (WINAPI *dump_proc)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
+        PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION,
+        PMINIDUMP_CALLBACK_INFORMATION);
+    HMODULE library = LoadLibraryW(L"dbghelp.dll");
+    dump_proc dump = library ? (dump_proc) GetProcAddress(library, "MiniDumpWriteDump") : NULL;
+    HANDLE file;
+    BOOL ok = FALSE;
+    if (dump) {
+        file = CreateFileW(L"pcntl-clone-child.dmp", GENERIC_WRITE, 0, NULL,
+            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file != INVALID_HANDLE_VALUE) {
+            ok = dump(process, pid, file, MiniDumpWithThreadInfo, NULL, NULL, NULL);
+            CloseHandle(file);
+        }
+    }
+    php_printf("nt-clone-dump-written=%d\n", ok ? 1 : 0);
+    if (library) FreeLibrary(library);
+}
+
 typedef LONG pcntl_ntstatus;
 typedef struct {
     ULONG Length;
@@ -38,6 +83,7 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     SECURITY_ATTRIBUTES attrs;
     HANDLE probe;
     DWORD probe_result;
+    int stage;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
@@ -65,6 +111,16 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         PCNTL_G(last_error) = EIO;
         RETURN_LONG(-1);
     }
+    for (stage = 0; stage < 5; stage++) {
+        pcntl_clone_checkpoints[stage] = CreateEventW(&attrs, TRUE, FALSE, NULL);
+        if (!pcntl_clone_checkpoints[stage]) {
+            while (stage > 0) CloseHandle(pcntl_clone_checkpoints[--stage]);
+            memset(pcntl_clone_checkpoints, 0, sizeof(pcntl_clone_checkpoints));
+            CloseHandle(probe);
+            PCNTL_G(last_error) = EIO;
+            RETURN_LONG(-1);
+        }
+    }
     memset(&info, 0, sizeof(info));
     info.Length = sizeof(info);
     result = clone(PCNTL_NT_CLONE_INHERIT_HANDLES, NULL, NULL, NULL, &info);
@@ -79,6 +135,8 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
         RETURN_LONG(0);
     }
     if (result < 0 || result != 0 || !info.ProcessHandle) {
+        for (stage = 0; stage < 5; stage++) CloseHandle(pcntl_clone_checkpoints[stage]);
+        memset(pcntl_clone_checkpoints, 0, sizeof(pcntl_clone_checkpoints));
         CloseHandle(probe);
         PCNTL_G(last_error) = EIO;
         RETURN_LONG(-1);
@@ -86,6 +144,18 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     probe_result = WaitForSingleObject(probe, 2500);
     CloseHandle(probe);
     php_printf("nt-clone-child-reached=%d\n", probe_result == WAIT_OBJECT_0 ? 1 : 0);
+    /* Give PHP continuation and shutdown a bounded interval. Report every
+     * checkpoint even on failure, then preserve the child's native stacks. */
+    WaitForSingleObject(pcntl_clone_checkpoints[4], 2500);
+    for (stage = 0; stage < 5; stage++) {
+        php_printf("nt-clone-checkpoint-%d=%d\n", stage,
+            WaitForSingleObject(pcntl_clone_checkpoints[stage], 0) == WAIT_OBJECT_0 ? 1 : 0);
+        CloseHandle(pcntl_clone_checkpoints[stage]);
+        pcntl_clone_checkpoints[stage] = NULL;
+    }
+    if (WaitForSingleObject(info.ProcessHandle, 500) == WAIT_TIMEOUT) {
+        pcntl_clone_dump(info.ProcessHandle, GetProcessId(info.ProcessHandle));
+    }
     pid = GetProcessId(info.ProcessHandle);
     if (!pid) {
         CloseHandle(info.ProcessHandle);
