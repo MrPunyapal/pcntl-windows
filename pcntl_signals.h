@@ -33,6 +33,19 @@ static void pcntl_win_enqueue(int signum)
     }
 }
 
+static void pcntl_win_schedule_pending_signals(void)
+{
+    int signum;
+    if (!PCNTL_G(async_signals)) return;
+    for (signum = 1; signum < 32; ++signum) {
+        if (!(PCNTL_G(signal_mask) & (((DWORD) 1) << signum))
+            && InterlockedCompareExchange(&pcntl_pending[signum], 0, 0) > 0) {
+            zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
+            break;
+        }
+    }
+}
+
 
 static bool pcntl_signal_supported(zend_long signum)
 {
@@ -229,6 +242,9 @@ static void pcntl_win_dispatch_signals(void)
         if (EG(exception)) break;
     }
     PCNTL_G(dispatching_signals) = false;
+    /* A nested VM interrupt may have been suppressed by the dispatch guard.
+     * Preserve async progress for signals queued by a running PHP handler. */
+    pcntl_win_schedule_pending_signals();
 }
 
 static void pcntl_win_interrupt_handler(zend_execute_data *execute_data)
@@ -256,17 +272,7 @@ PHP_FUNCTION(pcntl_async_signals)
     RETVAL_BOOL(PCNTL_G(async_signals));
     PCNTL_G(async_signals) = enabled;
     InterlockedExchange(&pcntl_async_enabled, enabled ? 1 : 0);
-    if (enabled) {
-        int signum;
-        for (signum = 1; signum < 32; ++signum) {
-            if (InterlockedCompareExchange(&pcntl_pending[signum], 0, 0) > 0) {
-                AcquireSRWLockShared(&pcntl_vm_lock);
-                if (pcntl_vm_target) zend_atomic_bool_store_ex(pcntl_vm_target, true);
-                ReleaseSRWLockShared(&pcntl_vm_lock);
-                break;
-            }
-        }
-    }
+    pcntl_win_schedule_pending_signals();
 }
 
 PHP_FUNCTION(pcntl_alarm)
@@ -334,15 +340,7 @@ PHP_FUNCTION(pcntl_sigprocmask)
     else PCNTL_G(signal_mask) = bits;
     /* An earlier VM interrupt may have observed only blocked events. Request
      * another interrupt when changing the mask makes queued work deliverable. */
-    if (PCNTL_G(async_signals)) {
-        for (i = 1; i < 32; ++i) {
-            if (!(PCNTL_G(signal_mask) & (((DWORD) 1) << i))
-                && InterlockedCompareExchange(&pcntl_pending[i], 0, 0) > 0) {
-                zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
-                break;
-            }
-        }
-    }
+    pcntl_win_schedule_pending_signals();
     if (old) {
         old = zend_try_array_init(old);
         if (!old) RETURN_THROWS();
