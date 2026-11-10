@@ -53,7 +53,7 @@ Primary sources:
 
 ## Alternate native POSIX runtime validation
 
-- Cygwin PHP 8.5: [CI passed](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809) real fork/exec, nested forks, copied PHP heap and stream inheritance. This separate Cygwin interpreter exposes 27 of 34 conditional PCNTL names and is not binary-compatible with ordinary Windows PHP.
+- Cygwin PHP 8.5: [CI passed](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42477101712) real fork/exec, nested forks, copied PHP heap, stream inheritance, and bidirectional inherited Unix socket communication. This separate Cygwin interpreter exposes 27 of 34 conditional PCNTL names and is not binary-compatible with ordinary Windows PHP.
 - WSL2 Linux PHP: real fork/exec conformance is covered by tests/reference/fork-exec.php; Linux source-build CI also verified network namespace creation and joining when permitted.
 - FreeBSD PHP: rfork is tested in tests/reference/rfork.php on a FreeBSD VM.
 - Solaris/illumos PHP: [forkx conformance passed](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42297736941) with PCNTL-enabled PHP 8.4 in a Solaris VM.

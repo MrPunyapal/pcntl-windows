@@ -25,7 +25,7 @@ These need real additional runtime capabilities, not stub implementations. [docs
 
 ## Genuine fork/exec on Windows through Cygwin PHP
 
-**Verified on November 7, 2026:** A separate Cygwin-linked PHP **8.5.14-dev CLI** passed real `pcntl_fork()` / `pcntl_exec()` conformance, including nested forks, heap isolation, inherited PHP streams and child wait statuses. The [passing CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809) published a [`cygwin-php85-pcntl-x64` artifact](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42371525809/artifacts/13575890455) (expires November 21, 2026). The [build script](tools/build-cygwin-php.sh) can recreate it.
+**Verified on November 8, 2026:** A separate Cygwin-linked PHP **8.5.14-dev CLI** passed real `pcntl_fork()` / `pcntl_exec()` conformance, including nested forks, heap isolation, inherited PHP streams, bidirectional Unix socket pairs and child wait statuses. The [passing CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42477101712) published a [`cygwin-php85-pcntl-x64` artifact](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42477101712/artifacts/13617142152) (expires November 22, 2026). The [build script](tools/build-cygwin-php.sh) can recreate it.
 
 **This is an entirely separate PHP executable, not an extension for standard MSVC-built Windows PHP.** It requires the Cygwin runtime and dependent DLLs, and the tested build exposes **27/34** conditional PCNTL names. Cygwin does not supply Linux namespaces, Solaris `forkx`, BSD `rfork` or Darwin QoS. See [Cygwin setup and test scope](docs/CYGWIN.md) and the [PowerShell launcher](docs/CYGWIN-LAUNCHER.md). It is experimental and not a production compatibility certification.
 

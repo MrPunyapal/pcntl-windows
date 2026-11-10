@@ -83,3 +83,5 @@ test -x "$php_binary"
 "$php_binary" -n tests/reference/fork-exec.php
 "$php_binary" -n tests/reference/fork-matrix.php
 "$php_binary" -n tests/reference/fork-socket-pair.php
+"$php_binary" -n tests/reference/fork-exec-environment.php
+"$php_binary" -n tests/reference/fork-many-children.php
