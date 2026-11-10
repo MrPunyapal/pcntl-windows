@@ -64,6 +64,21 @@ pumps events for at most 15 seconds, preserving a dump on second-chance
 exceptions. This instrumentation changes process/debugger state and cannot
 establish uninstrumented safety. Do not enable either option outside research.
 
+[Debugger run 42878290271](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42878290271)
+instead stopped before checkpoint 4 with second-chance `0xC0000008`
+(`STATUS_INVALID_HANDLE`). Matching Microsoft symbols resolve the stack through
+`KERNELBASE!CloseHandle`, `ucrtbase!_close_nolock_internal`, `_close_internal`,
+`_fclose_nolock_internal`, `_fclose_internal`, `fclose`, and `php8+0x754873`.
+The original PHP-side CRT descriptor table can reference kernel handles that
+were not inherited by the clone. This trace establishes invalid-handle cleanup;
+it does not establish that this exception is the uninstrumented access violation.
+
+The next differential test runs the same assertions through `php -r`, removing
+the source-file CRT descriptor while keeping module pinning enabled. Its output
+is compared exactly with the PHPT expectation and preserved as `clone-inline.txt`.
+The ordinary file-based PHPT remains mandatory and failing. Future diagnostic
+artifacts also retain the exact research DLL/PDB and PHP binaries for unwinding.
+
 The diagnostic artifact contains PHPT output/diffs/logs and
 `pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
 than treating an expired artifact link as permanent evidence. Checkpoints 0–4

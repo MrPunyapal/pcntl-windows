@@ -42,6 +42,24 @@ jobs:
           args: --enable-pcntl --enable-pcntl-unsafe-clone
           auth-token: ${{ github.token }}
           run-tests: 'true'
+      - name: Compare inline execution without a PHP source-file CRT descriptor
+        if: ${{ always() && inputs.pin_module && !inputs.debug_child }}
+        shell: pwsh
+        run: |
+          $php = Get-ChildItem build -Recurse -Filter php.exe | Where-Object FullName -Like '*\php-bin\php.exe' | Select-Object -First 1
+          $extension = Get-ChildItem build -Recurse -Filter php_pcntl.dll | Where-Object FullName -Like '*\x64\Release\php_pcntl.dll' | Select-Object -First 1
+          if (-not $php -or -not $extension) { throw 'Research build binaries missing' }
+          $test = Get-Content tests/026-unsafe-nt-clone.phpt -Raw
+          $source = [regex]::Match($test, '(?s)--FILE--\s*<\?php\s*(.*?)\?>\s*--EXPECT--').Groups[1].Value
+          $expected = ($test -split '--EXPECT--', 2)[1].Trim()
+          if (-not $source) { throw 'Cannot extract clone conformance source' }
+          $output = & $php.FullName -n -d "extension=$($extension.FullName)" -r $source
+          $code = $LASTEXITCODE
+          $output | Set-Content clone-inline.txt
+          $output | Write-Output
+          if ($code -ne 0 -or (($output -join "`n").Trim() -cne ($expected -replace "`r`n", "`n"))) {
+            throw 'Inline clone conformance failed; retain the file-mode failure separately'
+          }
       - name: Preserve negative results and native child dump
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,6 +67,11 @@ jobs:
           name: unsafe-clone-diagnostics
           path: |
             clone-crashes/*.dmp
+            clone-inline.txt
+            build/**/php-bin/php.exe
+            build/**/php-bin/php8.dll
+            build/**/x64/Release/php_pcntl.dll
+            build/**/x64/Release/php_pcntl.pdb
             build/**/pcntl-clone-child.dmp
             build/**/*.out
             build/**/*.diff
