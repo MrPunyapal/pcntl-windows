@@ -4,10 +4,12 @@
 #define PCNTL_SIG_IGN 1
 #define PCNTL_SIGHUP 1
 #define PCNTL_SIGINT 2
+#define PCNTL_SIGQUIT 3
 #define PCNTL_SIGUSR1 10
 #define PCNTL_SIGUSR2 12
 #define PCNTL_SIGALRM 14
 #define PCNTL_SIGTERM 15
+#define PCNTL_SIGCONT 18
 #define PCNTL_SIG_BLOCK 0
 #define PCNTL_SIG_UNBLOCK 1
 #define PCNTL_SIG_SETMASK 2
@@ -49,7 +51,10 @@ static void pcntl_win_schedule_pending_signals(void)
 
 static bool pcntl_signal_supported(zend_long signum)
 {
+    /* SIGQUIT and SIGCONT are local cooperative notifications only. Windows
+     * neither sends POSIX SIGQUIT nor implements SIGCONT process resumption. */
     return signum == PCNTL_SIGHUP || signum == PCNTL_SIGINT ||
+        signum == PCNTL_SIGQUIT || signum == PCNTL_SIGCONT ||
         signum == PCNTL_SIGUSR1 || signum == PCNTL_SIGUSR2 ||
         signum == PCNTL_SIGALRM || signum == PCNTL_SIGTERM ||
         signum == PCNTL_SIGCHLD;

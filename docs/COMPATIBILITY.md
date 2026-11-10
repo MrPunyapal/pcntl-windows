@@ -65,7 +65,7 @@ substitute fake Unix operations. The native module remains experimental.
 
 ## Cooperative signals
 
-- pcntl_signal: exported for selected extension-managed signals, console controls, and registered Windows-child SIGCHLD notifications; no arbitrary POSIX process-wide signal delivery.
+- pcntl_signal: exported for selected extension-managed signals, console controls, and registered Windows-child SIGCHLD notifications; no arbitrary POSIX process-wide signal delivery. Symfony Console and Laravel worker signal sets now include registerable cooperative SIGQUIT and SIGCONT, but neither is delivered by the Windows kernel as a Unix signal; SIGCONT does not resume a suspended process.
 - pcntl_signal_get_handler, pcntl_signal_dispatch: exported for registered PHP callbacks on the execution thread.
 - pcntl_async_signals: exported, integrates queued events through Zend VM interrupts for one active CLI request.
 - pcntl_sigprocmask: exported for extension-managed signals only; not a kernel thread signal mask.
