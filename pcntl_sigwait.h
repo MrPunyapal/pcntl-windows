@@ -130,15 +130,22 @@ PHP_FUNCTION(pcntl_sigtimedwait)
         Z_PARAM_LONG(nanoseconds)
     ZEND_PARSE_PARAMETERS_END();
     if (!pcntl_win_signal_set(signals, &mask)) RETURN_THROWS();
-    if (seconds < 0 || seconds > 4294967) {
-        zend_argument_value_error(3, "must be between 0 and 4294967");
+    if (seconds < 0) {
+        zend_argument_value_error(3, "must be greater than or equal to 0");
         RETURN_THROWS();
     }
     if (nanoseconds < 0 || nanoseconds >= 1000000000) {
         zend_argument_value_error(4, "must be between 0 and 999999999");
         RETURN_THROWS();
     }
-    timeout = (ULONGLONG) seconds * 1000 + ((ULONGLONG) nanoseconds + 999999) / 1000000;
+    if (seconds == 0 && nanoseconds == 0) {
+        zend_value_error("pcntl_sigtimedwait(): At least one of argument #3 ($seconds) or argument #4 ($nanoseconds) must be greater than 0");
+        RETURN_THROWS();
+    }
+    /* Saturate rather than wrap very large PHP integers into short waits.
+     * The wait loop splits finite durations below Win32's INFINITE sentinel. */
+    timeout = (ULONGLONG) seconds > (ULLONG_MAX - 1000) / 1000 ? ULLONG_MAX
+        : (ULONGLONG) seconds * 1000 + ((ULONGLONG) nanoseconds + 999999) / 1000000;
     signum = pcntl_win_wait_signal(mask, true, timeout);
     if (signum < 0) RETURN_FALSE;
     pcntl_win_signal_info(info, signum);
