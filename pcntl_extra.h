@@ -152,11 +152,20 @@ PHP_FUNCTION(pcntl_setcpuaffinity)
     }
     ZEND_HASH_FOREACH_VAL(cpus, cpu) {
         zend_long id;
-        if (Z_TYPE_P(cpu) != IS_LONG) {
-            zend_argument_type_error(2, "must contain only integer CPU ids");
+        ZVAL_DEREF(cpu);
+        if (Z_TYPE_P(cpu) == IS_LONG) {
+            id = Z_LVAL_P(cpu);
+        } else if (Z_TYPE_P(cpu) == IS_STRING) {
+            zend_ulong parsed;
+            if (!ZEND_HANDLE_NUMERIC(Z_STR_P(cpu), parsed)) {
+                zend_argument_value_error(2, "contains an invalid CPU id");
+                RETURN_THROWS();
+            }
+            id = (zend_long) parsed;
+        } else {
+            zend_argument_type_error(2, "must contain only int|string CPU ids");
             RETURN_THROWS();
         }
-        id = Z_LVAL_P(cpu);
         if (id < 0 || id >= (zend_long) (sizeof(DWORD_PTR) * CHAR_BIT)) {
             zend_argument_value_error(2, "contains an unsupported CPU id");
             RETURN_THROWS();
