@@ -51,6 +51,7 @@ nt-clone-checkpoint-1=1
 nt-clone-checkpoint-2=1
 nt-clone-checkpoint-3=1
 nt-clone-checkpoint-4=1
+nt-clone-native-exit=73
 bool(true)
 bool(true)
 bool(true)

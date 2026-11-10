@@ -169,6 +169,11 @@ PHP_FUNCTION(pcntl_windows_clone_experimental)
     }
     if (WaitForSingleObject(info.ProcessHandle, 500) == WAIT_TIMEOUT) {
         pcntl_clone_dump(info.ProcessHandle, GetProcessId(info.ProcessHandle));
+    } else {
+        DWORD native_exit;
+        if (GetExitCodeProcess(info.ProcessHandle, &native_exit)) {
+            php_printf("nt-clone-native-exit=%lu\n", (unsigned long) native_exit);
+        }
     }
     pid = GetProcessId(info.ProcessHandle);
     if (!pid) {

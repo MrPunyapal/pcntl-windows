@@ -20,6 +20,15 @@ jobs:
       PCNTL_UNSAFE_CLONE_PIN_MODULE: ${{ inputs.pin_module && '1' || '0' }}
     steps:
       - uses: actions/checkout@v5
+      - name: Capture crash dumps for isolated PHP processes
+        shell: pwsh
+        run: |
+          $dumpFolder = Join-Path $env:GITHUB_WORKSPACE 'clone-crashes'
+          New-Item -ItemType Directory -Path $dumpFolder -Force | Out-Null
+          $key = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\php.exe'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpFolder -PropertyType ExpandString -Value $dumpFolder -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpType -PropertyType DWord -Value 1 -Force | Out-Null
       - uses: php/php-windows-builder/extension@v1
         with:
           php-version: '8.5'
@@ -34,6 +43,7 @@ jobs:
         with:
           name: unsafe-clone-diagnostics
           path: |
+            clone-crashes/*.dmp
             build/**/pcntl-clone-child.dmp
             build/**/*.out
             build/**/*.diff
