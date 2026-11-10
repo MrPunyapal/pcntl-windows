@@ -2,6 +2,51 @@
 
 Target: the full conditional set of 34 function names declared by PHP 8.5's ext/pcntl/pcntl.stub.php. An exported function does not mean complete POSIX semantics.
 
+## November 11, 2026 audit changes
+
+The supported Windows matrix passed on PHP 8.4/8.5, TS/NTS and x86/x64
+at `3bb1ccb`: **35 passed, zero failed, one unsafe-clone test skipped per
+configuration** ([run 42878288902](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42878288902)).
+These fixes are covered by focused regressions:
+
+| API | Corrected behavior | Regression |
+| --- | --- | --- |
+| `pcntl_sigprocmask`, `pcntl_async_signals` | Unmasking pending work schedules another VM interrupt | `031-async-unblock.phpt` |
+| `pcntl_signal_dispatch` | Prevent recursive callbacks; resume async work queued inside a callback | `032-signal-reentrancy.phpt`, `035-async-handler-queue.phpt` |
+| `pcntl_setcpuaffinity` | Accept referenced integers and canonical integer strings, as upstream 8.4/8.5 do | `033-affinity-values.phpt` |
+| `pcntl_wait`, `pcntl_waitpid`, `pcntl_waitid` | Respect typed output references; rejected assignments retain registered child ownership | `034-typed-output-references.phpt` |
+| `pcntl_sigprocmask`, `pcntl_sigwaitinfo`, `pcntl_sigtimedwait` | Respect typed array output references | `034-typed-output-references.phpt` |
+| `pcntl_sigtimedwait` | Reject zero total duration; accept large nonnegative seconds without millisecond overflow; preserve output on timeout | `036-sigtimedwait-contract.phpt` |
+
+The affinity regression also passed against local upstream Linux PHP 8.4.13.
+The shared process-lifecycle reference passed on Linux PHP 8.4/8.5 in CI. Its
+expanded Cygwin verification is separate from native Windows verification.
+
+### Remaining API-level differences
+
+The function inventory below is not an assertion of exact argument/error parity.
+Beyond the platform limitations described per function:
+
+- Cooperative signal callbacks currently receive the signal number only, without
+  upstream kernel `siginfo` as a second argument. Signal arrays require supported
+  integer identifiers; upstream accepts some coercible values. Empty BLOCK/UNBLOCK
+  arrays are accepted locally, although upstream rejects them. Empty SETMASK is
+  supported by both.
+- Successful native operations generally clear `last_error`; upstream commonly
+  retains the previous error. The native timed-wait timeout sets `EAGAIN`, while
+  current upstream PHP returns false without updating its stored error for that
+  timeout. Do not use identical errno histories as a cross-runtime guarantee.
+- Native `waitid(WNOHANG)` emits empty output arrays when nothing is ready.
+  POSIX `siginfo` fields, UID accounting, stopped/continued events and full
+  resource-usage fields are not synthesized.
+- Native priority input is restricted to -20..19 and mapped into coarse Win32
+  classes; Unix kernel clamping, permission errors and warning text differ.
+- Win32 syscall failures are mapped to a finite CRT errno set. Warning and
+  exception behavior is not yet identical for every POSIX failure case.
+
+These remain compatibility gaps, not passing conformance claims or reasons to
+substitute fake Unix operations. The native module remains experimental.
+
 ## Native process operations
 
 - pcntl_waitpid: implemented for child processes returned by pcntl_windows_spawn, PID, -1, PID 0 (default children), and negative group IDs for registered Win32 children created with new_process_group=true; WNOHANG supported. This tracks extension-owned process groups only, not arbitrary POSIX groups.

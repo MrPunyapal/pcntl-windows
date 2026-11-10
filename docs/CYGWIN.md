@@ -1,14 +1,21 @@
 # Cygwin PHP 8.5 with real PCNTL on Windows
 
-## Verified result: November 8, 2026
+## Verified fork/exec baseline: November 11, 2026
 
 A separate **Cygwin-linked PHP 8.5.14-dev CLI** built successfully on a Windows GitHub Actions runner. It passed **real `pcntl_fork()` and `pcntl_exec()` tests**, including PID and process-image identity, nested forks, PHP heap isolation, inherited temporary streams, bidirectional Unix socket-pair communication, and wait statuses.
 
-- [Passing CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42477101712)
-- [Compiled `cygwin-php85-pcntl-x64` artifact](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42477101712/artifacts/13617142152)
+- [Passing CI run](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42874490177)
+- [Compiled `cygwin-php85-pcntl-x64` artifact](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42874490177/artifacts/13792457814)
 - [Source build script](../tools/build-cygwin-php.sh) and [CI workflow](../.github/workflows/cygwin-reference.yml)
 
-The artifact contains **`php.exe` and its SHA256 checksum**, not the Cygwin runtime or shared library dependencies. It expires **November 22, 2026** under the workflow's 14-day retention policy. Rebuild after expiration.
+The artifact contains **`php.exe` and its SHA256 checksum**, not the Cygwin runtime or shared library dependencies. Its recorded expiry is **2026-11-24T18:46:57Z** under the workflow's 14-day retention policy. Rebuild after expiration. The downloaded binary's SHA256 was independently checked as `edcc0d9456a66669a974af77b52a6735993e0652dc774ee194ff93e2f668e3d9`.
+
+**Expanded signal conformance is failing.** [Run 42876175564](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42876175564)
+passed the fork/exec/resource/socket/environment/reaping probes, then failed
+`process-lifecycle.php` at async signal delivery after `sigtimedwait`. The workflow
+correctly withheld the verified artifact. Do not infer signal/timer/group
+conformance from the earlier passing fork baseline. Failed binaries are now
+retained only as explicitly unsupported diagnostic artifacts.
 
 ## What works and what does not
 
@@ -54,4 +61,4 @@ installed Cygwin packages. Cygwin packages still come from a rolling mirror;
 the manifest records that remaining reproducibility limit. The artifact remains
 dependent on a compatible Cygwin installation.
 
-The Cygwin and Linux reference workflows also run `fork-exec-environment.php` (PID, working directory, explicit environment, whitespace and empty arguments) and `fork-many-children.php` (12 children, `WNOHANG`, exit status and `ECHILD` after reaping). These were first run under Linux PHP 8.4; Cygwin results must be checked on the corresponding commit before claiming Cygwin conformance. All scripts run both directly in the Cygwin build and through the Windows PowerShell launcher.
+The passing baseline above also verified `fork-exec-environment.php` (PID, working directory, explicit environment, whitespace and empty arguments) and `fork-many-children.php` (12 children, `WNOHANG`, exit status and `ECHILD` after reaping), both directly and through the Windows PowerShell launcher. The newly added combined lifecycle test remains failing; downstream group and SIGCHLD checks have not yet been reached under Cygwin.

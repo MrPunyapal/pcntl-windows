@@ -100,6 +100,33 @@ inaccessible shared mapping is a hypothesis, not yet a proven cause. Dumps now
 include memory-region metadata, and exception diagnostics compare that address's
 parent/child mapping state without dumping the full PHP heap.
 
+[Mapping comparison run 42880537958](https://github.com/MrPunyapal/pcntl-windows/actions/runs/42880537958)
+confirmed the fault address `0x26d08bd0000` was committed (`MEM_COMMIT=0x1000`),
+mapped (`MEM_MAPPED=0x40000`), and read-only (`PAGE_READONLY=0x2`) in the live
+parent, but free (`MEM_FREE=0x10000`) in the cloned child. Both runs faulted at
+the same `RtlpFcQueryFeatureConfigurationFromBuffers+0x2a` instruction. The clone
+therefore did not preserve a mapped region subsequently read by Windows runtime
+teardown. This is distinct from copied Zend heap state, which passed the narrow
+test. No safe general mapping/loader/CRT reconstruction has been implemented.
+
+Next bounded experiments should identify the section/view behind this address
+using parent memory and section metadata, reproduce the feature-query failure
+in a standalone NT clone without PHP, and characterize mapping inheritance
+before attempting any reconstruction. Do not write into undocumented loader
+locks or OS feature pointers, bypass normal shutdown, or relabel those changes
+as working fork semantics. Full PHP symbol packs and parent/child memory-region
+comparisons are needed for deeper teardown analysis.
+
+To inspect an artifact with Microsoft's console debugger, retain its PHP and
+extension binaries, then open `pcntl-clone-child.dmp` with matching image paths:
+
+```powershell
+cdb.exe -z .\pcntl-clone-child.dmp -y 'srv*C:\symbols*https://msdl.microsoft.com/download/symbols' -i '.\php-bin;.\x64\Release' -c '~* kb; r; q'
+```
+
+The research workflow still fails on each negative result; the supported Windows
+matrix skips this test. No native `pcntl_fork` or `pcntl_exec` has been exported.
+
 The diagnostic artifact contains PHPT output/diffs/logs and
 `pcntl-clone-child.dmp` for seven days. Reproduce via the manual workflow rather
 than treating an expired artifact link as permanent evidence. Checkpoints 0–4

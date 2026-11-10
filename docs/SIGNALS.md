@@ -11,3 +11,18 @@ Do not treat pcntl_windows_raise as posix_kill. The VM interrupt bridge targets 
 Synchronous signal waits use a Windows kernel event rather than a 1 ms polling loop. An unrelated queued signal cannot consume a signal requested by sigwaitinfo/sigtimedwait; the appropriate signal remains pending until explicitly consumed or dispatched. Synchronous signal waits consume extension-managed pending events only. Timeout handling uses Windows millisecond scheduling and may exceed a requested nanosecond interval. These calls do not receive arbitrary process-directed POSIX kernel signals.
 
 Windows child exit notifications are registered per child handle. They queue SIGCHLD without executing PHP code outside the main thread. Notifications are unregistered before the child record is released. A normal wait can enqueue the notification if a callback has not yet run.
+
+Unblocking queued events schedules a fresh VM interrupt when async dispatch is
+enabled. Dispatch has a recursion guard, and events queued inside a handler are
+scheduled again after that handler returns. A thrown PHP exception releases the
+guard. Output arrays respect PHP typed-reference constraints.
+
+As in current upstream PHP 8.4/8.5, `pcntl_sigtimedwait` requires a positive
+total duration, even if a signal is already queued. Use a positive nanosecond
+value for a short wait; Windows rounds this to millisecond scheduling. Large
+nonnegative seconds are accepted with saturating conversion rather than wrapping
+into a short timeout. On timeout the supplied info variable is unchanged.
+
+Callbacks currently receive only the signal number, without an upstream kernel
+siginfo argument. Additional argument/error differences are recorded in
+[COMPATIBILITY.md](COMPATIBILITY.md).
