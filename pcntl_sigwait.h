@@ -88,9 +88,8 @@ static zend_long pcntl_win_wait_signal(DWORD mask, bool timeout, ULONGLONG durat
 static void pcntl_win_signal_info(zval *info, zend_long signum)
 {
     if (!info) return;
-    ZVAL_DEREF(info);
-    zval_ptr_dtor(info);
-    array_init(info);
+    info = zend_try_array_init(info);
+    if (!info) return;
     add_assoc_long(info, "signo", signum);
     add_assoc_long(info, "errno", 0);
     add_assoc_long(info, "code", 0);
@@ -110,7 +109,9 @@ PHP_FUNCTION(pcntl_sigwaitinfo)
     ZEND_PARSE_PARAMETERS_END();
     if (!pcntl_win_signal_set(signals, &mask)) RETURN_THROWS();
     signum = pcntl_win_wait_signal(mask, false, 0);
+    if (signum < 0) RETURN_FALSE;
     pcntl_win_signal_info(info, signum);
+    if (EG(exception)) RETURN_THROWS();
     RETURN_LONG(signum);
 }
 
@@ -141,5 +142,6 @@ PHP_FUNCTION(pcntl_sigtimedwait)
     signum = pcntl_win_wait_signal(mask, true, timeout);
     if (signum < 0) RETURN_FALSE;
     pcntl_win_signal_info(info, signum);
+    if (EG(exception)) RETURN_THROWS();
     RETURN_LONG(signum);
 }

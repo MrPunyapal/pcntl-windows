@@ -363,14 +363,13 @@ PHP_FUNCTION(pcntl_windows_spawn)
 
 /* Map only metrics whose Win32 equivalents are useful to PHP callers.
  * Windows PeakWorkingSetSize is an approximation of POSIX ru_maxrss. */
-static void pcntl_win_rusage(HANDLE handle, zval *usage)
+static bool pcntl_win_rusage(HANDLE handle, zval *usage)
 {
     FILETIME created, exited, kernel, user;
     PROCESS_MEMORY_COUNTERS memory;
     ULARGE_INTEGER ticks;
-    ZVAL_DEREF(usage);
-    zval_ptr_dtor(usage);
-    array_init(usage);
+    usage = zend_try_array_init(usage);
+    if (!usage) return false;
     if (GetProcessTimes(handle, &created, &exited, &kernel, &user)) {
         ticks.LowPart = user.dwLowDateTime;
         ticks.HighPart = user.dwHighDateTime;
@@ -386,6 +385,7 @@ static void pcntl_win_rusage(HANDLE handle, zval *usage)
     if (GetProcessMemoryInfo(handle, &memory, sizeof(memory))) {
         add_assoc_long(usage, "ru_maxrss", (zend_long) (memory.PeakWorkingSetSize / 1024));
     }
+    return true;
 }
 
 /* Wait on one child or use threadpool exit notifications for any-child waits.
@@ -458,10 +458,9 @@ static zend_long pcntl_wait_impl(zend_long pid, zval *status, zend_long flags, z
         return -1;
     }
     pcntl_win_emit_sigchld(selected);
-    ZVAL_DEREF(status);
-    zval_ptr_dtor(status);
-    ZVAL_LONG(status, (zend_long) ((exit_code & 0xff) << 8));
-    if (usage) pcntl_win_rusage(selected->handle, usage);
+    ZEND_TRY_ASSIGN_REF_LONG(status, (zend_long) ((exit_code & 0xff) << 8));
+    if (EG(exception)) return -1;
+    if (usage && !pcntl_win_rusage(selected->handle, usage)) return -1;
     pid = (zend_long) selected->pid;
     for (link = &PCNTL_G(children); *link; link = &(*link)->next) {
         if (*link == selected) {

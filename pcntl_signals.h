@@ -344,9 +344,8 @@ PHP_FUNCTION(pcntl_sigprocmask)
         }
     }
     if (old) {
-        ZVAL_DEREF(old);
-        zval_ptr_dtor(old);
-        array_init(old);
+        old = zend_try_array_init(old);
+        if (!old) RETURN_THROWS();
         for (i = 1; i < 32; ++i) {
             if (before & (((DWORD) 1) << i)) add_next_index_long(old, i);
         }

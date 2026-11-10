@@ -60,14 +60,10 @@ PHP_FUNCTION(pcntl_waitid)
     }
     if (!selected) {
         if (info) {
-            ZVAL_DEREF(info);
-            zval_ptr_dtor(info);
-            array_init(info);
+            if (!zend_try_array_init(info)) RETURN_THROWS();
         }
         if (usage) {
-            ZVAL_DEREF(usage);
-            zval_ptr_dtor(usage);
-            array_init(usage);
+            if (!zend_try_array_init(usage)) RETURN_THROWS();
         }
         PCNTL_G(last_error) = 0;
         RETURN_TRUE;
@@ -78,9 +74,8 @@ PHP_FUNCTION(pcntl_waitid)
     }
     pcntl_win_emit_sigchld(selected);
     if (info) {
-        ZVAL_DEREF(info);
-        zval_ptr_dtor(info);
-        array_init(info);
+        info = zend_try_array_init(info);
+        if (!info) RETURN_THROWS();
         /* No native POSIX SIGCHLD; exported value is a compatibility marker. */
         add_assoc_long(info, "signo", PCNTL_SIGCHLD);
         add_assoc_long(info, "errno", 0);
@@ -88,7 +83,7 @@ PHP_FUNCTION(pcntl_waitid)
         add_assoc_long(info, "status", (zend_long) (code & 0xff));
         add_assoc_long(info, "pid", (zend_long) selected->pid);
     }
-    if (usage) pcntl_win_rusage(selected->handle, usage);
+    if (usage && !pcntl_win_rusage(selected->handle, usage)) RETURN_THROWS();
     if (!(flags & PCNTL_WNOWAIT)) {
         for (link = &PCNTL_G(children); *link; link = &(*link)->next) {
             if (*link == selected) {
